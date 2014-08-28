@@ -8,7 +8,7 @@ docstring goes here.
 
 from . import statistics
 from . import conversion
-from . import neo_tools
+#from . import neo_tools
 
 
 try:

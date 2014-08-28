@@ -176,7 +176,7 @@ def ff(x):
         the Fano Factor of the spike counts of the input spike trains
     '''
     # Build array of spike counts (one per spike train)
-    x_counts = numpy.array([len(t) for t in x])
+    x_counts = np.array([len(t) for t in x])
 
     # Compute FF
     if all([count == 0 for count in x_counts]):
@@ -257,17 +257,17 @@ def ff_timeresolved(x, win=None, start=None, stop=None, step=None):
     step_dl = float(wstep.simplified.base)
 
     # Define the centers of the sliding windows where the FF must be computed
-    ff_times = numpy.arange(wlen_dl / 2. + start_dl,
+    ff_times = np.arange(wlen_dl / 2. + start_dl,
         stop_dl - wlen_dl / 2. + step_dl / 2, step_dl)
 
     # Define the windows within which the FF must be computed (as Nx2 array)
-    windows = pq.s * numpy.array([numpy.max([ff_times - wlen_dl / 2.,
-        start_dl * numpy.ones(len(ff_times))], axis=0), numpy.min([ff_times \
-        + wlen_dl / 2., stop_dl * numpy.ones(len(ff_times))], axis=0)]).T
+    windows = pq.s * np.array([np.max([ff_times - wlen_dl / 2.,
+        start_dl * np.ones(len(ff_times))], axis=0), np.min([ff_times \
+        + wlen_dl / 2., stop_dl * np.ones(len(ff_times))], axis=0)]).T
     windows = windows.rescale(x[0].units)
 
     # Compute the FF in each window define above
-    ff_values = numpy.zeros(len(ff_times))
+    ff_values = np.zeros(len(ff_times))
     for i, w in enumerate(windows):
         x_sliced = [t.time_slice(w[0], w[1]) for t in x]
         ff_values[i] = ff(x_sliced)
@@ -319,7 +319,7 @@ def isi_pdf(x, bins=10, range=None, density=False):
     # meant in seconds)
     ISIs = []
     for st in x:
-        ISIs = numpy.hstack([ISIs, numpy.diff(st.simplified.magnitude)])
+        ISIs = np.hstack([ISIs, np.diff(st.simplified.magnitude)])
 
     # Set histogram range [isi_min, isi_max]
     if range == None:
@@ -349,13 +349,13 @@ def isi_pdf(x, bins=10, range=None, density=False):
         # If bins has length 1, interpret it as binsize and create bin array.
         # Otherwise return error
         if binsize.ndim == 0:
-            bins = numpy.arange(isi_min, isi_max + binsize / 2, binsize)
+            bins = np.arange(isi_min, isi_max + binsize / 2, binsize)
         else:
             raise ValueError(
                 'bins can be either int or single-value Quantity. Quantity '
                 'array of shape ' + bins.shape + ' given instead')
 
-    vals, edges = numpy.histogram(ISIs, bins, density=density)
+    vals, edges = np.histogram(ISIs, bins, density=density)
 
     # Add unit (inverse of time) to the histogram values if normalized
     if density == True:
@@ -402,10 +402,10 @@ def cv(x):
         x = [x]
 
     # Collect the ISIs of all trains in x, and return their CV
-    isis = numpy.array([])
+    isis = np.array([])
     for st in x:
         if len(st) > 1:
-            isis = numpy.hstack([isis, numpy.diff(st.simplified.base)])
+            isis = np.hstack([isis, np.diff(st.simplified.base)])
 
     # Compute CV of ISIs
     CV = 0. if len(isis) == 0 else isis.std() / isis.mean()
@@ -484,16 +484,16 @@ def cv_timeresolved(x, win=None, start=None, stop=None, step=None):
     step_dl = float(wstep.simplified.base)
 
     # Define the centers of the sliding windows where the CV must be computed
-    cv_times = numpy.arange(wlen_dl / 2. + start_dl,
+    cv_times = np.arange(wlen_dl / 2. + start_dl,
         stop_dl - wlen_dl / 2. + step_dl / 2, step_dl)
 
     # Define the nx2 array of time windows within which to compute the CV
-    windows = pq.s * numpy.array([numpy.max([cv_times - wlen_dl / 2.,
-        start_dl * numpy.ones(len(cv_times))], axis=0), numpy.min([cv_times +
-        wlen_dl / 2., stop_dl * numpy.ones(len(cv_times))], axis=0)]).T
+    windows = pq.s * np.array([np.max([cv_times - wlen_dl / 2.,
+        start_dl * np.ones(len(cv_times))], axis=0), np.min([cv_times +
+        wlen_dl / 2., stop_dl * np.ones(len(cv_times))], axis=0)]).T
 
     # Compute the CV in each window defined above
-    cv_values = numpy.zeros(len(cv_times))  # Initialize CV values to 0
+    cv_values = np.zeros(len(cv_times))  # Initialize CV values to 0
     for i, w in enumerate(windows):
         x_sliced = [t.time_slice(w[0], w[1]) for t in x]
         cv_values[i] = cv(x_sliced)
@@ -606,15 +606,15 @@ def peth_old(x, w, start=None, stop=None, output='counts'):
     t_stop = min_tstop if stop == None else stop
 
     # For each spike train in x, compute indices of the bins where each spike fall
-    x_mod_w = [numpy.array(((xx.view(pq.Quantity) - t_start) / w).rescale(pq.dimensionless).magnitude, dtype=int) for xx in x]
+    x_mod_w = [np.array(((xx.view(pq.Quantity) - t_start) / w).rescale(pq.dimensionless).magnitude, dtype=int) for xx in x]
 
     # For each spike train in x, compute the PETH as the histogram of the number of spikes per time bin
-    Nbins = int(numpy.ceil(((t_stop - t_start) / w).rescale(pq.dimensionless)))
-    bins = numpy.arange(0, Nbins + 1)
+    Nbins = int(np.ceil(((t_stop - t_start) / w).rescale(pq.dimensionless)))
+    bins = np.arange(0, Nbins + 1)
 
-    bin_hist = numpy.zeros(Nbins)
+    bin_hist = np.zeros(Nbins)
     for xx in x_mod_w:
-        bin_hist += numpy.histogram(xx, bins=bins)[0]
+        bin_hist += np.histogram(xx, bins=bins)[0]
 
     if output == 'mean':
         bin_hist *= 1. / len(x)  # divide by number of input spike trains
@@ -668,20 +668,20 @@ def ISIpdf(x, bins=10, range=None, density=False):
 
     # Collect all ISIs from each spike train in x (as arrays, meant in s)
     ISIs = []
-    for t in x: ISIs = numpy.hstack([ISIs, numpy.diff(t.simplified.magnitude)])
+    for t in x: ISIs = np.hstack([ISIs, np.diff(t.simplified.magnitude)])
 
     # If bins is a Quantity, convert it to an array (meant in seconds)
     if type(bins) == pq.quantity.Quantity:
         bins = bins.simplified.base
         # If bins has 1 element, interpret it as bin size and create arrays of bins
         if bins.ndim == 0:
-            bins = numpy.arange(min(ISIs), max(ISIs) + bins, bins)
+            bins = np.arange(min(ISIs), max(ISIs) + bins, bins)
 
     # Transform the range into a dimensionless list (values )
     r_dl = range if range==None else [r.simplified.magnitude for r in range]
 
     # Compute the histogram of ISIs
-    vals, edges = numpy.histogram(ISIs, bins, range=r_dl, density=density)
+    vals, edges = np.histogram(ISIs, bins, range=r_dl, density=density)
 
     # Return histogram values and bins; the latter are rescaled to the unit
     # of the first spike train

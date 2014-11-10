@@ -12,9 +12,9 @@ import numpy as np
 import quantities as pq
 import scipy.stats
 import neo
+import neo.core
 import warnings
 import conversion
-
 
 
 def isi(spiketrain, axis=-1):
@@ -571,118 +571,39 @@ def peth(sts, w, t_start=None, t_stop=None, output='counts'):
         signal=bin_hist, sampling_period=w, t_start=t_start)
 
 
-def peth_old(x, w, start=None, stop=None, output='counts'):
-    '''
-    Peri-Event Time Histogram of a list of spike trains.
+def fanofactor(spiketrains):
+    """
+    Evaluates the empirical Fano factor F of the spike counts of
+    a list of `neo.core.SpikeTrain` objects.
 
-    INPUT:
-        x [list]
-            A list of neo SpikeTrain objects
-        w [Quantity]
-            bin width for the histogram
-        start, stop [Quantity, optional]
-            starting and stopping time of the histogram. Only events in the
-            input spike trains falling between start and stop (both included)
-            are considered in the histogram
-        output [str]
-            type of values contained in histogram. Can be one of:
-            * 'counts': spike counts at each bin (as integer numbers)
-            * 'mean': mean spike counts per spike train
-            * 'rate': mean rate per spike train. Like 'mean', but the counts
-              are additionally normalized by the bin width.
-    OUTPUT:
-        Returns the pair of arrays (values, edges), where 'values' contains
-        the histogram values and 'edges' the bin edges (half-open to the
-        right, except the last bin which includes the right end.)
+    Given the vector v containing the observed spike counts (one per
+    spike train) in the time window [t0, t1], F is defined as:
 
-    '''
-    max_tstart = min([t.t_start for t in x])
-    min_tstop = max([t.t_stop for t in x])
+                        F := var(v)/mean(v).
 
-    if not (all([max_tstart == t.t_start for t in x]) and all([min_tstop == t.t_stop for t in x])):
-        warnings.warn('spike trains have different t_start or t_stop values. PETH computed for inner values only')
+    The Fano factor is typically computed for spike trains representing the
+    activity of the same neuron over different trials. The higher F, the larger
+    the cross-trial non-stationarity. In theory for a time-stationary Poisson
+    process, F=1.
 
-    t_start = max_tstart if start == None else start
-    t_stop = min_tstop if stop == None else stop
-
-    # For each spike train in x, compute indices of the bins where each spike fall
-    x_mod_w = [np.array(((xx.view(pq.Quantity) - t_start) / w).rescale(pq.dimensionless).magnitude, dtype=int) for xx in x]
-
-    # For each spike train in x, compute the PETH as the histogram of the number of spikes per time bin
-    Nbins = int(np.ceil(((t_stop - t_start) / w).rescale(pq.dimensionless)))
-    bins = np.arange(0, Nbins + 1)
-
-    bin_hist = np.zeros(Nbins)
-    for xx in x_mod_w:
-        bin_hist += np.histogram(xx, bins=bins)[0]
-
-    if output == 'mean':
-        bin_hist *= 1. / len(x)  # divide by number of input spike trains
-
-    elif output == 'rate':
-        bin_hist *= 1. / len(x)  # divide by number of input spike trains
-        bin_hist *= 1. / w  # and by bin width
-
-    # Return the PETH (normalized by the bin size) and the bins used to compute it
-    return bin_hist, t_start + bins * w
-
-
-
-def ISIpdf(x, bins=10, range=None, density=False):
-    '''
-    Deprecated! Use isi_pdf() instead...
-
-    Evaluate the empirical inter-spike-interval (ISI) probability density
-    function (pdf) from a list of spike trains.
-
-    Parameters:
+    Parameters
     ----------
-    x : list of neo.SpikeTrain
-        a list of spike trains for which to compute the FF
+    spiketrains : list of neo.core.SpikeTrain objects, quantity array,
+                  numpy array or list
+        Spike trains for which to compute the Fano factor of spike counts.
 
-    bins : int or time Quantity. Optional, default is 10
-        If int, number of bins of the pdf histogram.
-        If single value Quantity, length of each histogram time bin.
-        If Quantity array, bin edges for the ISI histogram
+    Returns
+    -------
+    fano : float or nan
+        The Fano factor of the spike counts of the input spike trains. If an
+        empty list is specified, or if all spike trains are empty, F:=nan.
+    """
+    # Build array of spike counts (one per spike train)
+    spike_counts = np.array([len(t) for t in spiketrains])
 
-    range : Quantity array or None. Optional, default is None
-        range (in time unit) over which to compute the histogram
-
-    density : bool. Optional, default is False
-        If False, the result will contain the number of samples in each bin.
-        If True, the result is the value of the pdf at the bin, normalized
-        such that the *integral* over the range is 1.
-        Note that the sum of the histogram values will not be equal to 1
-        unless bins of unity width are chosen.
-
-    Output:
-    ------
-    Returns the pair (values, windows), where:
-    * values is the array of FF values computed over consecutive windows,
-    * windows is the 2-dim array of such window (one row per window)
-
-    '''
-
-    # Convert x to a list if not such
-    if type(x) == neo.core.SpikeTrain: x = [x]
-
-    # Collect all ISIs from each spike train in x (as arrays, meant in s)
-    ISIs = []
-    for t in x: ISIs = np.hstack([ISIs, np.diff(t.simplified.magnitude)])
-
-    # If bins is a Quantity, convert it to an array (meant in seconds)
-    if type(bins) == pq.quantity.Quantity:
-        bins = bins.simplified.base
-        # If bins has 1 element, interpret it as bin size and create arrays of bins
-        if bins.ndim == 0:
-            bins = np.arange(min(ISIs), max(ISIs) + bins, bins)
-
-    # Transform the range into a dimensionless list (values )
-    r_dl = range if range==None else [r.simplified.magnitude for r in range]
-
-    # Compute the histogram of ISIs
-    vals, edges = np.histogram(ISIs, bins, range=r_dl, density=density)
-
-    # Return histogram values and bins; the latter are rescaled to the unit
-    # of the first spike train
-    return vals, (edges * pq.s).rescale(x[0].units)
+    # Compute FF
+    if all([count == 0 for count in spike_counts]):
+        fano = np.nan
+    else:
+        fano = spike_counts.var() / spike_counts.mean()
+    return fano

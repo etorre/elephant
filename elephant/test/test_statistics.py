@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import quantities as pq
 import neo.core
-import jelephant.analysis.stats as stats
+import elephant.statistics as stats
 
 
 class StatisticsTestCase(unittest.TestCase):

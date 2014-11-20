@@ -6,12 +6,11 @@ Created on Wed Oct 22 14:35:49 2014
 """
 
 import unittest
-import jelephant.analysis.cubic as cubic
-import jelephant.core.stocmod as sm
-import numpy as np
 import quantities as pq
 import neo
-import jelephant.analysis.stats as stats
+import elephant.cubic as cubic
+import elephant.stocmod as sm
+import elephant.statistics as stats
 
 
 class CubicTestCase(unittest.TestCase):

@@ -5,11 +5,10 @@ Created on Feb 22nd, 2013
 '''
 
 import unittest
-import jelephant.core.stocmod as sm
-import jelephant.core.surrogates as surr
 import numpy as np
 import quantities as pq
 import neo
+import elephant.surrogates as surr
 
 
 # TESTS to implement:

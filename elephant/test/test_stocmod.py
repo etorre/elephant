@@ -5,10 +5,10 @@ Created on Nov 27, 2012
 '''
 
 import unittest
-import jelephant.core.stocmod as sm
 import numpy as np
 import quantities as pq
 import neo
+import elephant.stocmod as sm
 
 
 class StocModelsTestCase(unittest.TestCase):

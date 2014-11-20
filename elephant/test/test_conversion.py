@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import quantities as pq
 import neo.core as n
-import jelephant.core.rep as rep
+import elephant.rep as rep
 
 
 class RepTestCase(unittest.TestCase):

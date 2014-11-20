@@ -14,7 +14,6 @@ import unittest
 from neo.test.generate_datasets import fake_neo, get_fake_values
 from neo.test.tools import assert_same_sub_schema
 from numpy.testing.utils import assert_array_equal
-
 import elephant.neo_tools as nt
 
 

@@ -3,7 +3,7 @@ import numpy as np
 import neo
 import warnings
 import quantities as pq
-import jelephant.core.rep as rep
+import elephant.rep as rep
 
 
 def fanofactor(spiketrains):

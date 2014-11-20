@@ -3,7 +3,8 @@ import random
 import warnings
 import quantities as pq
 import neo
-import jelephant.core.neo_tools as neo_tools
+import elephant.neo_tools as neo_tools
+
 
 def poisson(rate, t_stop, t_start=0 * pq.s, n=None, decimals=None):
     """

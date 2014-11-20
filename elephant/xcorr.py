@@ -1,7 +1,7 @@
 import numpy
 import quantities as pq
 import neo
-import jelephant.core.rep as rep
+import elephant.rep as rep
 
 
 def cchb(x, y, hlen=None, corrected=False, smooth=0, clip=False,

@@ -1,4 +1,4 @@
-import jelephant.core.neo_tools as nt
+import elephant.neo_tools as nt
 import numpy as np
 import neo
 

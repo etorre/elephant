@@ -8,7 +8,6 @@
 
 import numpy as np
 import quantities as pq
-#import jelephant.core.rep as rep
 import neo
 
 

@@ -1,7 +1,8 @@
 import neo.core
 import quantities as pq
 import numpy as np
-import jelephant.core.conditions as conditions
+import elephant.conditions as conditions
+
 
 def time_axis(tstart, tstop, h):
     """ Create a time axis

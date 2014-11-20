@@ -222,7 +222,7 @@ def sip_poisson(
     EXAMPLE:
 
     >>> import quantities as qt
-    >>> import jelephant.core.stocmod as sm
+    >>> import elephant.stocmod as sm
     >>> sip, coinc = sm.sip_poisson(M=10, N=0, T=1*qt.sec, \
             rate_b=20*qt.Hz,  rate_c=4, return_coinc = True)
 
@@ -484,7 +484,7 @@ def msip_poisson(
     EXAMPLE:
 
     >>> import quantities as qt
-    >>> import jelephant.core.stocmod as sm
+    >>> import elephant.stocmod as sm
     >>>
     >>> M = [1,2,3], [4,5]
     >>> N = 6

@@ -16,7 +16,7 @@ import elephant.conversion as rep
 
 def cch(
         st1, st2, window=None, normalize=False, border_correction=False,
-        binary=False, smooth=0, kernel='boxcar'):
+        binary=False, kernel=None):
     """
     Computes the cross-correlation histogram (CCH) between two binned spike
     trains st1 and st2.
@@ -46,20 +46,18 @@ def cch(
         same bin. If True, such spikes are considered as a single spike;
         otherwise they are considered as different spikes.
         Default: False.
-    smooth : Quantity or None (optional)
-        if smooth is a positive time, each bin in the raw cross-correlogram
-        is averaged over a window (-smooth/2, +smooth/2) with the values in
-        the neighbouring bins. If smooth <= w, no smoothing is performed.
+    kernel : array or None (optional)
+        A one dimensional array containing an optional smoothing kernel applied
+        to the resulting CCH. The length N of the kernel indicates the
+        smoothing window. The smoothing window cannot be larger than the
+        maximum lag of the CCH. The kernel is normalized to unit area before
+        being applied to the resulting CCH. Popular choices for the kernel are
+          * normalized boxcar kernel: numpy.ones(N)
+          * hamming: numpy.hamming(N)
+          * hanning: numpy.hanning(N)
+          * bartlett: numpy.bartlett(N)
+        If None is specified, the CCH is not smoothed
         Default: None
-    kernel : str or array (optional)
-        kernel used for smoothing (see parameter smooth above). Can be:
-        * list or array of floats defining the kernel weights
-        * one of the following strings:
-          * 'boxcar' : normalized boxcar window;
-          * 'hamming': normalized hamming window;
-          * 'hanning': normalized hanning window;
-          * 'bartlett': normalized bartlett window;
-        Default: 'boxcar'
 
    Returns
    -------
@@ -113,38 +111,26 @@ def cch(
         counts[timediff + Hbins] += st1_bin_counts_unique[r] * \
             st2_bin_counts_unique[timediff_in_range]
 
-    # #######################UP TO HERE################################
-
     # Correct the values taking into account lacking contributes at the edges
-    if border_correction == True:
+    if border_correction is True:
         correction = float(Hlen + 1) / np.array(
             Hlen + 1 - abs(np.arange(-Hlen, Hlen + 1)), float)
         counts = counts * correction
 
     # Define the kernel for smoothing as an ndarray
     if hasattr(kernel, '__iter__'):
-        kernel = np.array(kernel, dtype=float)
-    elif isinstance(kernel, str) and smooth > 1:
-        smooth_Nbin = min(int(smooth), Len)
-        if kernel == 'hamming':
-            win = np.hamming(smooth_Nbin)
-        elif kernel == 'bartlett':
-            win = np.bartlett(smooth_Nbin)
-        elif kernel == 'hanning':
-            win = np.hanning(smooth_Nbin)
-        elif kernel == 'boxcar':
-            win = np.ones(smooth_Nbin)
-        else:
+        if len(kernel) > Len:
             raise ValueError(
-                'kernel (%s) can be either an array or one of the following '
-                'strings: "boxcar", "hamming", "hanning", "bartlett".'
-                % str(kernel))
-        kernel = 1. * win / sum(win)
-    else:
-        kernel = np.array(1)
+                'The length of the kernel cannot be larger than the '
+                'length %d of the resulting CCH.' % Len)
+        kernel = np.array(kernel, dtype=float)
+        kernel = 1. * kernel / sum(kernel)
+    elif kernel is not None:
+        raise ValueError('Invalid smoothing kernel.')
 
     # Smooth the cross-correlation histogram with the kernel
-    counts = np.convolve(counts, kernel, mode='same')
+    if kernel is not None:
+        counts = np.convolve(counts, kernel, mode='same')
 
     # Rescale the histogram so that the central bin has height 1, if requested
     if normalize:

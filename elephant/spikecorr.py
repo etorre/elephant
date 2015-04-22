@@ -77,6 +77,13 @@ def cch(
     -------
     TODO: make example!
 
+    TODO:
+    * output as AnalogSignal
+    * make function faster?
+    * more unit tests
+    * variable renaming?
+    * doc string completion
+    *
     """
     # Retrieve unclipped matrix
     st1_spmat = st1.to_sparse_array()

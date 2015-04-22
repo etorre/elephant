@@ -66,9 +66,14 @@ def cch(
       returns the cross-correlation histogram between st1 and st2. The central
       bin of the histogram represents correlation at zero delay. Offset bins
       correspond to correlations at a delay equivalent to the difference
-      between the spike times of st1 and those of st2. I.e., bins to the right
-      correspond to spike of st2 following spikes of st1, and viceversa for
-      bins to the left.
+      between the spike times of st1 and those of st2: an entry at positive
+      lags corresponds to a spike in st2 following a spike in st1 bins to the
+      right, and an entry at negative lags corresponds to a spike in st1
+      following a spike in st2.
+      To illustrate, consider the two spike trains:
+      st1: 0 0 0 0 1 0 0 0 0 0 0
+      st2: 0 0 0 0 0 0 0 1 0 0 0
+      Here, the CCH will have an entry of 1 at lag h=+3.
 
     Example
     -------
@@ -131,7 +136,7 @@ def cch(
     counts = np.zeros(2 * Hbins + 1)
     bin_ids = np.arange(-Hbins, Hbins + 1)
 
-    # Compute the cch_all_pairs at lags in -Hbins,...,Hbins only
+    # Compute the CCH at lags in -Hbins,...,Hbins only
     for r, i in enumerate(x_filled):
         timediff = y_filled - i
         timediff_in_range = np.all(
@@ -139,6 +144,8 @@ def cch(
         timediff = (timediff[timediff_in_range]).reshape((-1,))
         counts[timediff + Hbins] += x_filled_howmany[r] * \
             y_filled_howmany[timediff_in_range]
+
+    # #######################UP TO HERE################################
 
     # Correct the values taking into account lacking contributes at the edges
     if border_correction == True:

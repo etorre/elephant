@@ -80,38 +80,6 @@ def cch(
     TODO: make example!
 
     """
-#     if isinstance(st1, rep.Binned):
-# Take the indices of the spike_indices bins in st1
-#         x_filled = st1.spike_indices[0]
-#         x_mat = st1.matrix_clipped()[
-#             0] if binary else st1.matrix_unclipped()[0]
-#         x_filled_howmany = x_mat[x_filled]
-# del(x_mat)  # Delete big unnecessary object
-#     else:
-# TODO: return error instead
-#         if type(st1) != np.ndarray:
-#             st1 = np.array(st1)
-#         if binary == True:
-#             st1 = 1 * (st1 > 0)
-#         x_filled = np.where(st1 > 0)[0]
-#         x_filled_howmany = st1[x_filled]
-#
-#     if isinstance(st2, rep.Binned):
-# Take the indices of the spike_indices bins in st2
-#         y_filled = st2.spike_indices[0]
-#         y_mat = st2.matrix_clipped()[
-#             0] if binary else st2.matrix_unclipped()[0]
-#         y_filled_howmany = y_mat[y_filled]
-# del(y_mat)  # Delete big unnecessary object
-#     else:
-# TODO: return error instead
-#         if type(st2) != np.ndarray:
-#             st2 = np.array(st2)
-#         if binary == True:
-#             st2 = 1 * (st2 > 0)
-#         y_filled = np.where(st2 > 0)[0]
-#         y_filled_howmany = st2[y_filled]
-
     # Retrieve unclipped matrix
     st1_spmat = st1.to_sparse_array()
     st2_spmat = st2.to_sparse_array()
@@ -127,26 +95,6 @@ def cch(
         st1_bin_counts_unique = st1_spmat.data
         st2_bin_counts_unique = st2_spmat.data
 
-    x_filled = st1_bin_idx_unique
-    y_filled = st2_bin_idx_unique
-    x_filled_howmany = st1_bin_counts_unique
-    y_filled_howmany = st2_bin_counts_unique
-
-# Take the indices of the spike_indices bins in st1 and st2
-#     x_filled = st1.spike_indices[0]
-#     y_filled = st2.spike_indices[0]
-#
-# Compute the binned spike trains
-#     x_mat = st1.matrix_clipped()[0]
-#     y_mat = st2.matrix_clipped()[0]
-#
-# Select the spike_indices bins of st1 and st2 into a smaller array
-#     x_filled_howmany = x_mat[x_filled]
-#     y_filled_howmany = y_mat[y_filled]
-#
-# Delete big unnecessary objects
-#     del(x_mat, y_mat)
-
     # Define the half-length of the full crosscorrelogram.
     Len = st1.num_bins + st2.num_bins - 1
     Hlen = Len // 2
@@ -157,13 +105,13 @@ def cch(
     bin_ids = np.arange(-Hbins, Hbins + 1)
 
     # Compute the CCH at lags in -Hbins,...,Hbins only
-    for r, i in enumerate(x_filled):
-        timediff = y_filled - i
+    for r, i in enumerate(st1_bin_idx_unique):
+        timediff = st2_bin_idx_unique - i
         timediff_in_range = np.all(
             [timediff >= -Hbins, timediff <= Hbins], axis=0)
         timediff = (timediff[timediff_in_range]).reshape((-1,))
-        counts[timediff + Hbins] += x_filled_howmany[r] * \
-            y_filled_howmany[timediff_in_range]
+        counts[timediff + Hbins] += st1_bin_counts_unique[r] * \
+            st2_bin_counts_unique[timediff_in_range]
 
     # #######################UP TO HERE################################
 

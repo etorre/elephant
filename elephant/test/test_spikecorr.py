@@ -41,7 +41,7 @@ class cch_TestCase(unittest.TestCase):
             [self.st_1], t_start=0 * pq.ms, t_stop=50. * pq.ms,
             binsize=1 * pq.ms)
 
-    def test_corrcoef_binned(self):
+    def test_cch(self):
         '''
         Test result of a correlation coefficient between two binned spike
         trains.
@@ -58,7 +58,7 @@ class cch_TestCase(unittest.TestCase):
         mat1 = self.binned_st1.to_array()[0]
         mat2 = self.binned_st2.to_array()[0]
         target_numpy = np.correlate(mat2, mat1, mode='full')
-        assert_array_equal(target_numpy, res_unclipped[0])
+        assert_array_equal(target_numpy, res_unclipped[0].magnitude)
 
         # Check clipped correlation
         # Use numpy correlate to verify result. Note: numpy conventions for
@@ -66,7 +66,14 @@ class cch_TestCase(unittest.TestCase):
         mat1 = np.array(self.binned_st1.to_bool_array()[0], dtype=int)
         mat2 = np.array(self.binned_st2.to_bool_array()[0], dtype=int)
         target_numpy = np.correlate(mat2, mat1, mode='full')
-        assert_array_equal(target_numpy, res_clipped[0])
+        assert_array_equal(target_numpy, res_clipped[0].magnitude)
+        assert_array_almost_equal(
+            res_clipped[1]*self.binned_st1.binsize + self.binned_st1.binsize /
+            float(2), res_clipped[0].times)
+        assert_array_almost_equal(
+            res_clipped[1]*self.binned_st1.binsize + self.binned_st1.binsize /
+            float(2), res_clipped[0].times)
+
 
 if __name__ == '__main__':
     unittest.main()

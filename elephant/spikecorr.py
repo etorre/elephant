@@ -78,13 +78,17 @@ def cch(
     TODO: make example!
 
     TODO:
-    * output as AnalogSignal
+    * output as AnalogSignal(DONE)
     * make function faster?
     * more unit tests
     * variable renaming?
     * doc string completion
     *
     """
+    if st1.binsize != st2.binsize:
+        raise ValueError("The spike trains have to be binned with the same bin"
+        "size")
+
     # Retrieve unclipped matrix
     st1_spmat = st1.to_sparse_array()
     st2_spmat = st2.to_sparse_array()
@@ -142,9 +146,13 @@ def cch(
     # Rescale the histogram so that the central bin has height 1, if requested
     if normalize:
         counts = np.array(counts, float) / float(counts[Hlen])
+    # Trasform the array count into an AnalogSignalArray
+    cch = neo.AnalogSignalArray(
+        signal=counts, units=pq.dimensionless, t_start=bin_ids[0] * st1.binsize
+        + st1.binsize / float(2), sampling_period=st1.binsize)
 
     # Return only the Hbins bins and counts before and after the central one
-    return counts, bin_ids
+    return cch, bin_ids
 
 
 def ccht(x, y, w, window=None, start=None, stop=None, corrected=False,

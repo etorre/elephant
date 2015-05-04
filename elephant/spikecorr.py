@@ -12,7 +12,7 @@ import numpy as np
 import quantities as pq
 import neo
 import elephant.conversion as rep
-
+import pdb
 
 def cch(
         st1, st2, window=None, normalize=False, border_correction=False,
@@ -146,10 +146,12 @@ def cch(
     # Rescale the histogram so that the central bin has height 1, if requested
     if normalize:
         counts = np.array(counts, float) / float(counts[Hlen])
+
     # Trasform the array count into an AnalogSignalArray
     cch = neo.AnalogSignalArray(
-        signal=counts, units=pq.dimensionless, t_start=bin_ids[0] * st1.binsize
-        + st1.binsize / float(2), sampling_period=st1.binsize)
+        signal=counts.reshape(counts.size, 1), units=pq.dimensionless,
+        t_start=bin_ids[0] * st1.binsize + st1.binsize / float(2),
+        sampling_period=st1.binsize)
 
     # Return only the Hbins bins and counts before and after the central one
     return cch, bin_ids

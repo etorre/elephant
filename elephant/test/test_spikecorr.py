@@ -58,7 +58,8 @@ class cch_TestCase(unittest.TestCase):
         mat1 = self.binned_st1.to_array()[0]
         mat2 = self.binned_st2.to_array()[0]
         target_numpy = np.correlate(mat2, mat1, mode='full')
-        assert_array_equal(target_numpy, res_unclipped[0].magnitude)
+        assert_array_equal(target_numpy, np.hstack(
+            res_unclipped[0].magnitude))
 
         # Check clipped correlation
         # Use numpy correlate to verify result. Note: numpy conventions for
@@ -66,7 +67,10 @@ class cch_TestCase(unittest.TestCase):
         mat1 = np.array(self.binned_st1.to_bool_array()[0], dtype=int)
         mat2 = np.array(self.binned_st2.to_bool_array()[0], dtype=int)
         target_numpy = np.correlate(mat2, mat1, mode='full')
-        assert_array_equal(target_numpy, res_clipped[0].magnitude)
+        assert_array_equal(target_numpy, np.hstack(
+            res_clipped[0].magnitude))
+
+        # Check the time axis of the AnalogSignalArray
         assert_array_almost_equal(
             res_clipped[1]*self.binned_st1.binsize + self.binned_st1.binsize /
             float(2), res_clipped[0].times)

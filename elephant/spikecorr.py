@@ -125,7 +125,7 @@ def cch(
     # Correct the values taking into account lacking contributes at the edges
     if border_correction is True:
         correction = float(Hlen + 1) / np.array(
-            Hlen + 1 - abs(np.arange(-Hlen, Hlen + 1)), float)
+            Hlen + 1 - abs(np.arange(-Hbins, Hbins + 1)), float)
         counts = counts * correction
 
     # Define the kernel for smoothing as an ndarray

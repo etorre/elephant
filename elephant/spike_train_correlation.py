@@ -9,6 +9,8 @@ This modules provides functions to calculate correlations between spike trains.
 """
 from __future__ import division
 import numpy as np
+import quantities as pq
+import neo
 
 
 def corrcoef(binned_sts, binary=False):
@@ -146,3 +148,149 @@ def corrcoef(binned_sts, binary=False):
             # Fill entry of correlation matrix
             C[i, j] = C[j, i] = cc_enum / cc_denom
     return C
+
+
+def cross_correlation_histogram(
+        st1, st2, window=None, normalize=False, border_correction=False,
+        binary=False, kernel=None):
+    """
+    Computes the cross-correlation histogram (CCH) between two binned spike
+    trains st1 and st2.
+
+    Parameters
+    ----------
+    st1,st2 : BinnedSpikeTrain
+        Binned spike trains to cross-correlate.
+    window : int or None (optional)
+        histogram half-length. If specified, the cross-correlation histogram
+        has a number of bins equal to 2*window+1 (up to the maximum length).
+        If not specified, the full crosscorrelogram is returned
+        Default: None
+    normalize : bool (optional)
+        whether to normalize the central value (corresponding to time lag
+        0 s) to 1; the other values are rescaled accordingly.
+        Default: False
+    border_correction : bool (optional)
+        whether to correct for the border effect. If True, the value of the
+        CCH at bin b (for b=-H,-H+1, ...,H, where H is the CCH half-length)
+        is multiplied by the correction factor:
+                            (H+1)/(H+1-|b|),
+        which linearly corrects for loss of bins at the edges.
+        Default: False
+    binary : bool (optional)
+        whether to binary spikes from the same spike train falling in the
+        same bin. If True, such spikes are considered as a single spike;
+        otherwise they are considered as different spikes.
+        Default: False.
+    kernel : array or None (optional)
+        A one dimensional array containing an optional smoothing kernel applied
+        to the resulting CCH. The length N of the kernel indicates the
+        smoothing window. The smoothing window cannot be larger than the
+        maximum lag of the CCH. The kernel is normalized to unit area before
+        being applied to the resulting CCH. Popular choices for the kernel are
+          * normalized boxcar kernel: numpy.ones(N)
+          * hamming: numpy.hamming(N)
+          * hanning: numpy.hanning(N)
+          * bartlett: numpy.bartlett(N)
+        If None is specified, the CCH is not smoothed
+        Default: None
+
+   Returns
+   -------
+      returns the cross-correlation histogram between st1 and st2. The central
+      bin of the histogram represents correlation at zero delay. Offset bins
+      correspond to correlations at a delay equivalent to the difference
+      between the spike times of st1 and those of st2: an entry at positive
+      lags corresponds to a spike in st2 following a spike in st1 bins to the
+      right, and an entry at negative lags corresponds to a spike in st1
+      following a spike in st2.
+      To illustrate, consider the two spike trains:
+      st1: 0 0 0 0 1 0 0 0 0 0 0
+      st2: 0 0 0 0 0 0 0 1 0 0 0
+      Here, the CCH will have an entry of 1 at lag h=+3.
+
+    Example
+    -------
+    TODO: make example!
+
+    TODO:
+    * output as AnalogSignal(DONE)
+    * make function faster?
+    * more unit tests
+    * variable renaming?
+    * doc string completion
+    *
+    """
+    if st1.binsize != st2.binsize:
+        raise ValueError("The spike trains have to be binned with the same bin"
+        "size")
+
+    # Retrieve unclipped matrix
+    st1_spmat = st1.to_sparse_array()
+    st2_spmat = st2.to_sparse_array()
+
+    # For each row, extract the nonzero column indices and the corresponding
+    # data in the matrix (for performance reasons)
+    st1_bin_idx_unique = st1_spmat.nonzero()[1]
+    st2_bin_idx_unique = st2_spmat.nonzero()[1]
+    if binary:
+        st1_bin_counts_unique = np.array(st1_spmat.data > 0, dtype=int)
+        st2_bin_counts_unique = np.array(st2_spmat.data > 0, dtype=int)
+    else:
+        st1_bin_counts_unique = st1_spmat.data
+        st2_bin_counts_unique = st2_spmat.data
+
+    # Define the half-length of the full crosscorrelogram.
+    Len = st1.num_bins + st2.num_bins - 1
+    Hlen = Len // 2
+    Hbins = Hlen if window is None else min(window, Hlen)
+
+    # Initialize the counts to an array of zeroes, and the bin ids to
+    counts = np.zeros(2 * Hbins + 1)
+    bin_ids = np.arange(-Hbins, Hbins + 1)
+
+    # Compute the CCH at lags in -Hbins,...,Hbins only
+    for r, i in enumerate(st1_bin_idx_unique):
+        timediff = st2_bin_idx_unique - i
+        timediff_in_range = np.all(
+            [timediff >= -Hbins, timediff <= Hbins], axis=0)
+        timediff = (timediff[timediff_in_range]).reshape((-1,))
+        counts[timediff + Hbins] += st1_bin_counts_unique[r] * \
+            st2_bin_counts_unique[timediff_in_range]
+
+    # Correct the values taking into account lacking contributes at the edges
+    if border_correction is True:
+        correction = float(Hlen + 1) / np.array(
+            Hlen + 1 - abs(np.arange(-Hbins, Hbins + 1)), float)
+        counts = counts * correction
+
+    # Define the kernel for smoothing as an ndarray
+    if hasattr(kernel, '__iter__'):
+        if len(kernel) > Len:
+            raise ValueError(
+                'The length of the kernel cannot be larger than the '
+                'length %d of the resulting CCH.' % Len)
+        kernel = np.array(kernel, dtype=float)
+        kernel = 1. * kernel / sum(kernel)
+    elif kernel is not None:
+        raise ValueError('Invalid smoothing kernel.')
+
+    # Smooth the cross-correlation histogram with the kernel
+    if kernel is not None:
+        counts = np.convolve(counts, kernel, mode='same')
+
+    # Rescale the histogram so that the central bin has height 1, if requested
+    if normalize:
+        counts = np.array(counts, float) / float(counts[Hlen])
+
+    # Trasform the array count into an AnalogSignalArray
+    cch = neo.AnalogSignalArray(
+        signal=counts.reshape(counts.size, 1), units=pq.dimensionless,
+        t_start=bin_ids[0] * st1.binsize + st1.binsize / float(2),
+        sampling_period=st1.binsize)
+
+    # Return only the Hbins bins and counts before and after the central one
+    return cch, bin_ids
+
+# TODO: Long name?
+cch = cross_correlation_histogram

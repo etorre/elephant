@@ -14,7 +14,6 @@ import quantities as pq
 import neo
 import elephant.conversion as conv
 import elephant.spike_train_correlation as sc
-from statsmodels.regression.tests.test_quantile_regression import idx
 
 
 class corrcoeff_TestCase(unittest.TestCase):

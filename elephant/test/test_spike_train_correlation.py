@@ -14,6 +14,7 @@ import quantities as pq
 import neo
 import elephant.conversion as conv
 import elephant.spike_train_correlation as sc
+from statsmodels.regression.tests.test_quantile_regression import idx
 
 
 class corrcoeff_TestCase(unittest.TestCase):
@@ -119,7 +120,7 @@ class corrcoeff_TestCase(unittest.TestCase):
         self.assertEqual(target, 1.)
 
 
-class cch_TestCase(unittest.TestCase):
+class cross_correlation_histogram_TestCase(unittest.TestCase):
 
     def setUp(self):
         # These two arrays must be such that they do not have coincidences
@@ -142,15 +143,15 @@ class cch_TestCase(unittest.TestCase):
             [self.st_1], t_start=0 * pq.ms, t_stop=50. * pq.ms,
             binsize=1 * pq.ms)
 
-    def test_cch(self):
+    def test_cross_correlation_histogram(self):
         '''
         Test result of a correlation coefficient between two binned spike
         trains.
         '''
         # Calculate clipped and unclipped
-        res_clipped = sc.cch(
+        result_clipped = sc.cross_correlation_histogram(
             self.binned_st1, self.binned_st2, window=None, binary=True)
-        res_unclipped = sc.cch(
+        result_unclipped = sc.cross_correlation_histogram(
             self.binned_st1, self.binned_st2, window=None, binary=False)
 
         # Check unclipped correlation
@@ -159,8 +160,8 @@ class cch_TestCase(unittest.TestCase):
         mat1 = self.binned_st1.to_array()[0]
         mat2 = self.binned_st2.to_array()[0]
         target_numpy = np.correlate(mat2, mat1, mode='full')
-        assert_array_equal(target_numpy, np.hstack(
-            res_unclipped[0].magnitude))
+        assert_array_equal(
+            target_numpy, np.squeeze(result_unclipped[0].magnitude))
 
         # Check clipped correlation
         # Use numpy correlate to verify result. Note: numpy conventions for
@@ -168,16 +169,58 @@ class cch_TestCase(unittest.TestCase):
         mat1 = np.array(self.binned_st1.to_bool_array()[0], dtype=int)
         mat2 = np.array(self.binned_st2.to_bool_array()[0], dtype=int)
         target_numpy = np.correlate(mat2, mat1, mode='full')
-        assert_array_equal(target_numpy, np.hstack(
-            res_clipped[0].magnitude))
+        assert_array_equal(
+            target_numpy, np.squeeze(result_clipped[0].magnitude))
 
         # Check the time axis of the AnalogSignalArray
         assert_array_almost_equal(
-            res_clipped[1] * self.binned_st1.binsize +
-            self.binned_st1.binsize / float(2), res_clipped[0].times)
+            result_clipped[1] * self.binned_st1.binsize +
+            self.binned_st1.binsize / float(2), result_clipped[0].times)
         assert_array_almost_equal(
-            res_clipped[1] * self.binned_st1.binsize +
-            self.binned_st1.binsize / float(2), res_clipped[0].times)
+            result_clipped[1] * self.binned_st1.binsize +
+            self.binned_st1.binsize / float(2), result_clipped[0].times)
+
+    def test_normalize_option(self):
+        '''
+        Test result of a CCH between two binned spike
+        trains.
+        '''
+        # Calculate normalized and raw cch
+        # TODO: window=5 does not work
+        result_norm = sc.cross_correlation_histogram(
+            self.binned_st1, self.binned_st2, window=None, binary=False,
+            normalize=True)
+        result_raw = sc.cross_correlation_histogram(
+            self.binned_st1, self.binned_st2, window=None, binary=False,
+            normalize=False)
+
+        # Check that length of CCH is uneven
+        cch_len = len(result_norm[0])
+        self.assertEqual(np.mod(cch_len, 2), 1)
+
+        center_bin = np.floor(cch_len / 2)
+        target_time = \
+            result_norm[0].times.magnitude[center_bin + 1] + \
+            result_norm[0].times.magnitude[center_bin]
+        target_value = result_norm[0].magnitude[center_bin]
+
+        print len(result_norm[0])
+        print result_norm[0].times.magnitude[0], result_norm[0].times.magnitude[98]
+        print center_bin
+        print result_norm[0].times.magnitude[center_bin - 1], result_norm[0].times.magnitude[center_bin], result_norm[0].times.magnitude[center_bin + 1]
+        print target_time
+        print target_value
+
+        self.assertEqual(
+            target_time, 0)
+        self.assertEqual(
+            target_value, 1)
+
+    def test_exist_alias(self):
+        '''
+        Test if alias cch still exists.
+        '''
+        self.assertEqual(sc.cross_correlation_histogram, sc.cch)
 
 if __name__ == '__main__':
     unittest.main()

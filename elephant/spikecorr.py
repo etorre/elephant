@@ -14,7 +14,7 @@ import neo
 import elephant.conversion as rep
 
 
-def cch(
+def cross_correlation_histogram(
         st1, st2, window=None, normalize=False, border_correction=False,
         binary=False, kernel=None):
     """
@@ -145,6 +145,9 @@ def cch(
 
     # Return only the Hbins bins and counts before and after the central one
     return counts, bin_ids
+
+# TODO: Long name?
+cch = cross_correlation_histogram
 
 
 def ccht(x, y, w, window=None, start=None, stop=None, corrected=False,

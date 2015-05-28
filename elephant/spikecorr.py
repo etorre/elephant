@@ -12,7 +12,7 @@ import numpy as np
 import quantities as pq
 import neo
 import elephant.conversion as rep
-
+import pdb
 
 def cross_correlation_histogram(
         st1, st2, window=None, normalize=False, border_correction=False,
@@ -78,13 +78,17 @@ def cross_correlation_histogram(
     TODO: make example!
 
     TODO:
-    * output as AnalogSignal
+    * output as AnalogSignal(DONE)
     * make function faster?
     * more unit tests
     * variable renaming?
     * doc string completion
     *
     """
+    if st1.binsize != st2.binsize:
+        raise ValueError("The spike trains have to be binned with the same bin"
+        "size")
+
     # Retrieve unclipped matrix
     st1_spmat = st1.to_sparse_array()
     st2_spmat = st2.to_sparse_array()
@@ -121,7 +125,7 @@ def cross_correlation_histogram(
     # Correct the values taking into account lacking contributes at the edges
     if border_correction is True:
         correction = float(Hlen + 1) / np.array(
-            Hlen + 1 - abs(np.arange(-Hlen, Hlen + 1)), float)
+            Hlen + 1 - abs(np.arange(-Hbins, Hbins + 1)), float)
         counts = counts * correction
 
     # Define the kernel for smoothing as an ndarray
@@ -143,8 +147,14 @@ def cross_correlation_histogram(
     if normalize:
         counts = np.array(counts, float) / float(counts[Hlen])
 
+    # Trasform the array count into an AnalogSignalArray
+    cch = neo.AnalogSignalArray(
+        signal=counts.reshape(counts.size, 1), units=pq.dimensionless,
+        t_start=bin_ids[0] * st1.binsize + st1.binsize / float(2),
+        sampling_period=st1.binsize)
+
     # Return only the Hbins bins and counts before and after the central one
-    return counts, bin_ids
+    return cch, bin_ids
 
 # TODO: Long name?
 cch = cross_correlation_histogram

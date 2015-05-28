@@ -222,8 +222,8 @@ def cross_correlation_histogram(
     *
     """
     if st1.binsize != st2.binsize:
-        raise ValueError("The spike trains have to be binned with the same bin"
-        "size")
+        raise ValueError(
+            "The spike trains have to be binned with the same bin size")
 
     # Retrieve unclipped matrix
     st1_spmat = st1.to_sparse_array()
@@ -240,10 +240,16 @@ def cross_correlation_histogram(
         st1_bin_counts_unique = st1_spmat.data
         st2_bin_counts_unique = st2_spmat.data
 
-    # Define the half-length of the full crosscorrelogram.
+    # Define the half-length of the full crosscorrelogram
+    # TODO: What is correct
+    # here? Why +, not max? How can we have an entry beyond the maximum length
+    # of the array?
     Len = st1.num_bins + st2.num_bins - 1
     Hlen = Len // 2
-    Hbins = Hlen if window is None else min(window, Hlen)
+    if window is None:
+        Hbins = Hlen
+    else:
+        Hbins = min(window, Hlen)
 
     # Initialize the counts to an array of zeroes, and the bin ids to
     counts = np.zeros(2 * Hbins + 1)

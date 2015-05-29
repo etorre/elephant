@@ -254,7 +254,6 @@ def cross_correlation_histogram(
     # Initialize the counts to an array of zeroes, and the bin ids to
     counts = np.zeros(2 * Hbins + 1)
     bin_ids = np.arange(-Hbins, Hbins + 1)
-
     # Compute the CCH at lags in -Hbins,...,Hbins only
     for r, i in enumerate(st1_bin_idx_unique):
         timediff = st2_bin_idx_unique - i
@@ -292,8 +291,7 @@ def cross_correlation_histogram(
     # Trasform the array count into an AnalogSignalArray
     cch = neo.AnalogSignalArray(
         signal=counts.reshape(counts.size, 1), units=pq.dimensionless,
-        t_start=bin_ids[0] * st1.binsize + st1.binsize / float(2),
-        sampling_period=st1.binsize)
+        t_start=bin_ids[0] * st1.binsize, sampling_period=st1.binsize)
 
     # Return only the Hbins bins and counts before and after the central one
     return cch, bin_ids

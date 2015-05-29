@@ -173,11 +173,11 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
 
         # Check the time axis of the AnalogSignalArray
         assert_array_almost_equal(
-            result_clipped[1] * self.binned_st1.binsize +
-            self.binned_st1.binsize / float(2), result_clipped[0].times)
+            result_clipped[1] * self.binned_st1.binsize,
+            result_unclipped[0].times)
         assert_array_almost_equal(
-            result_clipped[1] * self.binned_st1.binsize +
-            self.binned_st1.binsize / float(2), result_clipped[0].times)
+            result_clipped[1] * self.binned_st1.binsize,
+            result_clipped[0].times)
 
     def test_normalize_option(self):
         '''
@@ -200,7 +200,7 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         center_bin = np.floor(cch_len / 2)
         target_time = \
             result_norm[0].times.magnitude[center_bin + 1] + \
-            result_norm[0].times.magnitude[center_bin]
+            result_norm[0].times.magnitude[center_bin - 1]
         target_value = result_norm[0].magnitude[center_bin]
 
         print len(result_norm[0])

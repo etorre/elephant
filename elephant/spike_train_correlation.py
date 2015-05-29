@@ -244,8 +244,10 @@ def cross_correlation_histogram(
     # TODO: What is correct
     # here? Why +, not max? How can we have an entry beyond the maximum length
     # of the array?
-    Len = st1.num_bins + st2.num_bins - 1
-    Hlen = Len // 2
+    Hlen = np.max([st1.num_bins, st2.num_bins]) - 1
+    Len = 2 * Hlen + 1
+    #Len = st1.num_bins + st2.num_bins - 1
+    #Hlen = Len // 2
     if window is None:
         Hbins = Hlen
     else:

@@ -203,17 +203,21 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
             result_norm[0].times.magnitude[center_bin - 1]
         target_value = result_norm[0].magnitude[center_bin]
 
-        print len(result_norm[0])
-        print result_norm[0].times.magnitude[0], result_norm[0].times.magnitude[98]
-        print center_bin
-        print result_norm[0].times.magnitude[center_bin - 1], result_norm[0].times.magnitude[center_bin], result_norm[0].times.magnitude[center_bin + 1]
-        print target_time
-        print target_value
-
         self.assertEqual(
             target_time, 0)
         self.assertEqual(
             target_value, 1)
+    
+    def test_binsize(self):
+        self.binned_st3 = conv.BinnedSpikeTrain(
+            [self.st_1], t_start=0 * pq.ms, t_stop=50. * pq.ms,
+            binsize=5 * pq.ms)
+        self.assertRaises(
+            ValueError, sc.cch, self.binned_st1, self.binned_st3)
+
+    def test_window(self):
+        _ , bin_ids = sc.cch(self.binned_st1, self.binned_st2, window=30)
+        assert_array_equal(bin_ids, np.arange(-30, 31, 1))
 
     def test_exist_alias(self):
         '''

@@ -14,7 +14,6 @@ import quantities as pq
 import neo
 import elephant.conversion as conv
 import elephant.spike_train_correlation as sc
-from networkx.classes.function import edges
 
 
 class corrcoeff_TestCase(unittest.TestCase):
@@ -189,9 +188,6 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         result_norm = sc.cross_correlation_histogram(
             self.binned_st1, self.binned_st2, window=None, binary=False,
             normalize=True)
-        result_raw = sc.cross_correlation_histogram(
-            self.binned_st1, self.binned_st2, window=None, binary=False,
-            normalize=False)
 
         # Check that length of CCH is uneven
         cch_len = len(result_norm[0])
@@ -226,6 +222,30 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         _, bin_ids = sc.cch(
             self.binned_st1, self.binned_st2, normalize=True, window=30)
         assert_array_equal(bin_ids, np.arange(-30, 31, 1))
+
+    def test_border_correction(self):
+        '''Test if the border correction for bins at the edges is correctly
+        performed'''
+        cch_corrected, bin_ids_corrected = sc.cch(
+            self.binned_st1, self.binned_st2, window=None, normalize=False,
+            border_correction=True, binary=False, kernel=None)
+        cch, bin_ids = sc.cch(
+            self.binned_st1, self.binned_st2, window=None, normalize=False,
+            border_correction=False, binary=False, kernel=None)
+        self.assertNotEqual(cch.all(), cch_corrected.all())
+
+    def test_kernel(self):
+        '''Test if the smoothing kernel is correctly defined, and wheter it is
+        applied properly.'''
+        smoothed_cch, _ = sc.cch(
+            self.binned_st1, self.binned_st2, kernel=np.ones(3))
+        cch, _ = sc.cch(
+            self.binned_st1, self.binned_st2, kernel=None)
+        self.assertNotEqual(smoothed_cch.all, cch.all)
+        with self.assertRaises(ValueError):
+            sc.cch(self.binned_st1, self.binned_st2, kernel=np.ones(100))
+        with self.assertRaises(ValueError):
+            sc.cch(self.binned_st1, self.binned_st2, kernel='BOX')
 
     def test_exist_alias(self):
         '''

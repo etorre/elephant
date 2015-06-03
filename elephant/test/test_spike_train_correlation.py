@@ -14,6 +14,7 @@ import quantities as pq
 import neo
 import elephant.conversion as conv
 import elephant.spike_train_correlation as sc
+from networkx.classes.function import edges
 
 
 class corrcoeff_TestCase(unittest.TestCase):
@@ -144,7 +145,7 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
 
     def test_cross_correlation_histogram(self):
         '''
-        Test result of a correlation coefficient between two binned spike
+        Test result of a cross-correlation histogram between two binned spike
         trains.
         '''
         # Calculate clipped and unclipped
@@ -181,11 +182,10 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
 
     def test_normalize_option(self):
         '''
-        Test result of a CCH between two binned spike
-        trains.
+        Test result of a CCH between two binned spike trains with the
+        normalization turned on.
         '''
         # Calculate normalized and raw cch
-        # TODO: window=5 does not work
         result_norm = sc.cross_correlation_histogram(
             self.binned_st1, self.binned_st2, window=None, binary=False,
             normalize=True)
@@ -207,8 +207,10 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
             target_time, 0)
         self.assertEqual(
             target_value, 1)
-    
+
     def test_binsize(self):
+        '''Check that an exception is thrown if the two spike trains are not 
+        binned with the same bin size.'''
         self.binned_st3 = conv.BinnedSpikeTrain(
             [self.st_1], t_start=0 * pq.ms, t_stop=50. * pq.ms,
             binsize=5 * pq.ms)
@@ -216,7 +218,13 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
             ValueError, sc.cch, self.binned_st1, self.binned_st3)
 
     def test_window(self):
-        _ , bin_ids = sc.cch(self.binned_st1, self.binned_st2, window=30)
+        '''Test if the window parameter is correctly interpreted.'''
+        _, bin_ids = sc.cch(
+            self.binned_st1, self.binned_st2, window=30)
+        assert_array_equal(bin_ids, np.arange(-30, 31, 1))
+
+        _, bin_ids = sc.cch(
+            self.binned_st1, self.binned_st2, normalize=True, window=30)
         assert_array_equal(bin_ids, np.arange(-30, 31, 1))
 
     def test_exist_alias(self):

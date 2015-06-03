@@ -288,12 +288,14 @@ def cross_correlation_histogram(
 
     # Rescale the histogram so that the central bin has height 1, if requested
     if normalize:
-        counts = np.array(counts, float) / float(counts[Hlen])
+        counts = np.array(counts, float) / float(counts[Hbins])
 
     # Trasform the array count into an AnalogSignalArray
     cch = neo.AnalogSignalArray(
-        signal=counts.reshape(counts.size, 1), units=pq.dimensionless,
-        t_start=bin_ids[0] * st1.binsize, sampling_period=st1.binsize)
+        signal=counts.reshape(counts.size, 1),
+        units=pq.dimensionless,
+        t_start=bin_ids[0] * st1.binsize,
+        sampling_period=st1.binsize)
 
     # Return only the Hbins bins and counts before and after the central one
     return cch, bin_ids

@@ -192,32 +192,40 @@ def cross_correlation_histogram(
           * hamming: numpy.hamming(N)
           * hanning: numpy.hanning(N)
           * bartlett: numpy.bartlett(N)
-        If None is specified, the CCH is not smoothed.
+        If a kernel is used and normalize is True, the kernel is applied first,
+        and the result is normalize to the central bin. If None is specified,
+        the CCH is not smoothed.
         Default: None
+
+        TODO:
+        * Normalize before or after smoothing -- is this good?
 
     Returns
     -------
-    cch
-          AnalogSignalArray containing the cross-correlation histogram between
-          st1 and st2.
+    cch : AnalogSignalArray
+        Containing the cross-correlation histogram between st1 and st2.
 
-          The central bin of the histogram represents correlation at zero
-          delay. Offset bins correspond to correlations at a delay equivalent
-          to the difference between the spike times of st1 and those of st2: an
-          entry at positive lags corresponds to a spike in st2 following a
-          spike in st1 bins to the right, and an entry at negative lags
-          corresponds to a spike in st1 following a spike in st2.
+        The central bin of the histogram represents correlation at zero
+        delay. Offset bins correspond to correlations at a delay equivalent
+        to the difference between the spike times of st1 and those of st2: an
+        entry at positive lags corresponds to a spike in st2 following a
+        spike in st1 bins to the right, and an entry at negative lags
+        corresponds to a spike in st1 following a spike in st2.
 
-          To illustrate this definition, consider the two spike trains:
-          st1: 0 0 0 0 1 0 0 0 0 0 0
-          st2: 0 0 0 0 0 0 0 1 0 0 0
-          Here, the CCH will have an entry of 1 at lag h=+3.
+        To illustrate this definition, consider the two spike trains:
+        st1: 0 0 0 0 1 0 0 0 0 0 0
+        st2: 0 0 0 0 0 0 0 1 0 0 0
+        Here, the CCH will have an entry of 1 at lag h=+3.
 
-          Consistent with the definition of AnalogSignalArrays, the time axis
-          represents the left bin borders of each histogram bin. For example,
-          the time axis might be:
-          np.array([-2.5 -1.5 -0.5 0.5 1.5]) * ms
-
+        Consistent with the definition of AnalogSignalArrays, the time axis
+        represents the left bin borders of each histogram bin. For example,
+        the time axis might be:
+        np.array([-2.5 -1.5 -0.5 0.5 1.5]) * ms
+    bin_ids : ndarray of int
+        Contains the IDs of the individual histogram bins, where the central
+        bin has ID 0, bins the left have negative IDs and bins to the right
+        have positive IDs, e.g.,:
+        np.array([-3, -2, -1, 0, 1, 2, 3])
 
     Example
     -------
@@ -246,14 +254,9 @@ def cross_correlation_histogram(
         >>> plt.axis('tight')
         >>> plt.show()
 
-    TODO:
-    * output as AnalogSignal(DONE)
-    * make function faster?
-    * more unit tests(DONE)
-    * variable renaming?
-    * doc string completion(DONE)
-    * Normalize before or after smoothing?
-    *
+    Alias
+    -----
+    cch
     """
     if st1.binsize != st2.binsize:
         raise ValueError(
@@ -278,39 +281,41 @@ def cross_correlation_histogram(
     #
     # TODO: What is correct here? Why +, not max? How can we have an entry
     # beyond the maximum length of the array?
-    Hlen = np.max([st1.num_bins, st2.num_bins]) - 1
-    Len = 2 * Hlen + 1
-    #Len = st1.num_bins + st2.num_bins - 1
-    #Hlen = Len // 2
+    hist_half_length = np.max([st1.num_bins, st2.num_bins]) - 1
+    hist_length = 2 * hist_half_length + 1
+    # hist_length = st1.num_bins + st2.num_bins - 1
+    # hist_half_length = hist_length // 2
     if window is None:
-        Hbins = Hlen
+        hist_bins = hist_half_length
     else:
-        Hbins = min(window, Hlen)
+        hist_bins = min(window, hist_half_length)
 
-    # Initialize the counts to an array of zeroes, and the bin ids to
-    counts = np.zeros(2 * Hbins + 1)
-    bin_ids = np.arange(-Hbins, Hbins + 1)
-    # Compute the CCH at lags in -Hbins,...,Hbins only
+    # Initialize the counts to an array of zeroes, and the bin IDs to integers
+    # spanning the time axis
+    counts = np.zeros(2 * hist_bins + 1)
+    bin_ids = np.arange(-hist_bins, hist_bins + 1)
+    # Compute the CCH at lags in -hist_bins,...,hist_bins only
     for r, i in enumerate(st1_bin_idx_unique):
         timediff = st2_bin_idx_unique - i
         timediff_in_range = np.all(
-            [timediff >= -Hbins, timediff <= Hbins], axis=0)
+            [timediff >= -hist_bins, timediff <= hist_bins], axis=0)
         timediff = (timediff[timediff_in_range]).reshape((-1,))
-        counts[timediff + Hbins] += st1_bin_counts_unique[r] * \
+        counts[timediff + hist_bins] += st1_bin_counts_unique[r] * \
             st2_bin_counts_unique[timediff_in_range]
 
     # Correct the values taking into account lacking contributes at the edges
     if border_correction is True:
-        correction = float(Hlen + 1) / np.array(
-            Hlen + 1 - abs(np.arange(-Hbins, Hbins + 1)), float)
+        correction = float(hist_half_length + 1) / np.array(
+            hist_half_length + 1 - abs(np.arange(-hist_bins, hist_bins + 1)),
+            float)
         counts = counts * correction
 
     # Define the kernel for smoothing as an ndarray
     if hasattr(kernel, '__iter__'):
-        if len(kernel) > Len:
+        if len(kernel) > hist_length:
             raise ValueError(
                 'The length of the kernel cannot be larger than the '
-                'length %d of the resulting CCH.' % Len)
+                'length %d of the resulting CCH.' % hist_length)
         kernel = np.array(kernel, dtype=float)
         kernel = 1. * kernel / sum(kernel)
     elif kernel is not None:
@@ -322,7 +327,7 @@ def cross_correlation_histogram(
 
     # Rescale the histogram so that the central bin has height 1, if requested
     if normalize:
-        counts = np.array(counts, float) / float(counts[Hbins])
+        counts = np.array(counts, float) / float(counts[hist_bins])
 
     # Transform the array count into an AnalogSignalArray
     cch = neo.AnalogSignalArray(
@@ -331,34 +336,9 @@ def cross_correlation_histogram(
         t_start=(bin_ids[0] - 0.5) * st1.binsize,
         sampling_period=st1.binsize)
 
-    # Return only the Hbins bins and counts before and after the central one
+    # Return only the hist_bins bins and counts before and after the central
+    # one
     return cch, bin_ids
 
-# TODO: Long name?
+# Alias for common abbreviation
 cch = cross_correlation_histogram
-
-
-import elephant.conversion
-import elephant.spike_train_generation
-import matplotlib.pyplot as plt
-
-binned_st1 = elephant.conversion.BinnedSpikeTrain(
-    elephant.spike_train_generation.homogeneous_poisson_process(
-        10. * pq.Hz, t_start=0 * pq.ms, t_stop=2000 * pq.s),
-    binsize=1. * pq.ms)
-binned_st2 = elephant.conversion.BinnedSpikeTrain(
-    elephant.spike_train_generation.homogeneous_poisson_process(
-        10. * pq.Hz, t_start=0 * pq.ms, t_stop=2000 * pq.s),
-    binsize=1. * pq.ms)
-
-cc_hist = cross_correlation_histogram(
-    binned_st1, binned_st2, window=20,
-    normalize=True, border_correction=False, binary=False, kernel=None)
-
-plt.bar(
-    left=cc_hist[0].times.magnitude, height=cc_hist[0][:, 0].magnitude,
-    width=cc_hist[0].sampling_period.magnitude)
-plt.xlabel('time (' + str(cc_hist[0].times.units) + ')')
-plt.ylabel('normalized cross-correlation histogram')
-plt.axis('tight')
-plt.show()

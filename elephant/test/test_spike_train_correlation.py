@@ -180,8 +180,6 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         assert_array_almost_equal(
             (result_clipped[1] - 0.5) * self.binned_st1.binsize,
             result_clipped[0].times)
-        print result_clipped[1] * self.binned_st1.binsize
-        print result_clipped[0].times
 
     def test_normalize_option(self):
         '''
@@ -211,7 +209,8 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         '''Check that an exception is thrown if the two spike trains are not
         binned with the same bin size.'''
         self.assertRaises(
-            ValueError, sc.cch, self.binned_st1, self.binned_st3)
+            ValueError,
+            sc.cross_correlation_histogram, self.binned_st1, self.binned_st3)
 
     def test_window(self):
         '''Test if the window parameter is correctly interpreted.'''
@@ -226,10 +225,10 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
     def test_border_correction(self):
         '''Test if the border correction for bins at the edges is correctly
         performed'''
-        cch_corrected, bin_ids_corrected = sc.cch(
+        cch_corrected, _ = sc.cross_correlation_histogram(
             self.binned_st1, self.binned_st2, window=None, normalize=False,
             border_correction=True, binary=False, kernel=None)
-        cch, bin_ids = sc.cch(
+        cch, _ = sc.cross_correlation_histogram(
             self.binned_st1, self.binned_st2, window=None, normalize=False,
             border_correction=False, binary=False, kernel=None)
         self.assertNotEqual(cch.all(), cch_corrected.all())
@@ -237,9 +236,9 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
     def test_kernel(self):
         '''Test if the smoothing kernel is correctly defined, and wheter it is
         applied properly.'''
-        smoothed_cch, _ = sc.cch(
+        smoothed_cch, _ = sc.cross_correlation_histogram(
             self.binned_st1, self.binned_st2, kernel=np.ones(3))
-        cch, _ = sc.cch(
+        cch, _ = sc.cross_correlation_histogram(
             self.binned_st1, self.binned_st2, kernel=None)
         self.assertNotEqual(smoothed_cch.all, cch.all)
         with self.assertRaises(ValueError):

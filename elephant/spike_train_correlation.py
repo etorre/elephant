@@ -221,14 +221,37 @@ def cross_correlation_histogram(
 
     Example
     -------
-    TODO: make example!
+        Plot the cross-correlation histogram between two Poisson spike trains
+
+        >>> binned_st1 = elephant.conversion.BinnedSpikeTrain(
+                elephant.spike_train_generation.homogeneous_poisson_process(
+                    10. * pq.Hz, t_start=0 * pq.ms, t_stop=2000 * pq.s),
+                binsize=1. * pq.ms)
+        >>> binned_st2 = elephant.conversion.BinnedSpikeTrain(
+                elephant.spike_train_generation.homogeneous_poisson_process(
+                    10. * pq.Hz, t_start=0 * pq.ms, t_stop=2000 * pq.s),
+                binsize=1. * pq.ms)
+
+        >>> cc_hist = cross_correlation_histogram(
+                binned_st1, binned_st2, window=20,
+                normalize=True, border_correction=False,
+                binary=False, kernel=None)
+
+        >>> plt.bar(
+                left=cc_hist[0].times.magnitude,
+                height=cc_hist[0][:, 0].magnitude,
+                width=cc_hist[0].sampling_period.magnitude)
+        >>> plt.xlabel('time (' + str(cc_hist[0].times.units) + ')')
+        >>> plt.ylabel('normalized cross-correlation histogram')
+        >>> plt.axis('tight')
+        >>> plt.show()
 
     TODO:
     * output as AnalogSignal(DONE)
     * make function faster?
     * more unit tests(DONE)
     * variable renaming?
-    * doc string completion
+    * doc string completion(DONE)
     * Normalize before or after smoothing?
     *
     """
@@ -313,3 +336,29 @@ def cross_correlation_histogram(
 
 # TODO: Long name?
 cch = cross_correlation_histogram
+
+
+import elephant.conversion
+import elephant.spike_train_generation
+import matplotlib.pyplot as plt
+
+binned_st1 = elephant.conversion.BinnedSpikeTrain(
+    elephant.spike_train_generation.homogeneous_poisson_process(
+        10. * pq.Hz, t_start=0 * pq.ms, t_stop=2000 * pq.s),
+    binsize=1. * pq.ms)
+binned_st2 = elephant.conversion.BinnedSpikeTrain(
+    elephant.spike_train_generation.homogeneous_poisson_process(
+        10. * pq.Hz, t_start=0 * pq.ms, t_stop=2000 * pq.s),
+    binsize=1. * pq.ms)
+
+cc_hist = cross_correlation_histogram(
+    binned_st1, binned_st2, window=20,
+    normalize=True, border_correction=False, binary=False, kernel=None)
+
+plt.bar(
+    left=cc_hist[0].times.magnitude, height=cc_hist[0][:, 0].magnitude,
+    width=cc_hist[0].sampling_period.magnitude)
+plt.xlabel('time (' + str(cc_hist[0].times.units) + ')')
+plt.ylabel('normalized cross-correlation histogram')
+plt.axis('tight')
+plt.show()

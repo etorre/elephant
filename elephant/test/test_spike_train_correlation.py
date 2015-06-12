@@ -152,9 +152,9 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         spike trains.
         '''
         # Calculate CCH using Elephant (normal and binary version)
-        result_clipped = sc.cross_correlation_histogram(
+        cch_clipped, bin_ids_clipped = sc.cross_correlation_histogram(
             self.binned_st1, self.binned_st2, window=None, binary=True)
-        result_unclipped = sc.cross_correlation_histogram(
+        cch_unclipped, bin_ids_unclipped = sc.cross_correlation_histogram(
             self.binned_st1, self.binned_st2, window=None, binary=False)
 
         # Check normal correlation Note: Use numpy correlate to verify result.
@@ -164,22 +164,22 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         mat2 = self.binned_st2.to_array()[0]
         target_numpy = np.correlate(mat2, mat1, mode='full')
         assert_array_equal(
-            target_numpy, np.squeeze(result_unclipped[0].magnitude))
+            target_numpy, np.squeeze(cch_unclipped.magnitude))
 
         # Check correlation using binary spike trains
         mat1 = np.array(self.binned_st1.to_bool_array()[0], dtype=int)
         mat2 = np.array(self.binned_st2.to_bool_array()[0], dtype=int)
         target_numpy = np.correlate(mat2, mat1, mode='full')
         assert_array_equal(
-            target_numpy, np.squeeze(result_clipped[0].magnitude))
+            target_numpy, np.squeeze(cch_clipped.magnitude))
 
-        # Check the time axis of the resulting AnalogSignalArray
+        # Check the time axis and bin IDs of the resulting AnalogSignalArray
         assert_array_almost_equal(
-            (result_clipped[1] - 0.5) * self.binned_st1.binsize,
-            result_unclipped[0].times)
+            (bin_ids_clipped - 0.5) * self.binned_st1.binsize,
+            cch_unclipped.times)
         assert_array_almost_equal(
-            (result_clipped[1] - 0.5) * self.binned_st1.binsize,
-            result_clipped[0].times)
+            (bin_ids_clipped - 0.5) * self.binned_st1.binsize,
+            cch_clipped.times)
 
     def test_normalize_option(self):
         '''
@@ -187,21 +187,21 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         normalization turned on.
         '''
         # Calculate normalized and raw cch
-        result_norm = sc.cross_correlation_histogram(
+        cch_norm, _ = sc.cross_correlation_histogram(
             self.binned_st1, self.binned_st2, window=None, binary=False,
             normalize=True)
 
         # Check that length of CCH is uneven
-        cch_len = len(result_norm[0])
+        cch_len = len(cch_norm)
         self.assertEqual(np.mod(cch_len, 2), 1)
 
         # Check that central bin is 1
         center_bin = np.floor(cch_len / 2)
-        target_time = result_norm[0].times.magnitude[center_bin]
-        target_value = result_norm[0].magnitude[center_bin]
+        target_time = cch_norm.times.magnitude[center_bin]
+        target_value = cch_norm.magnitude[center_bin]
 
         self.assertEqual(
-            target_time, -result_norm[0].sampling_period.magnitude / 2.)
+            target_time, -cch_norm.sampling_period.magnitude / 2.)
         self.assertEqual(
             target_value, 1)
 

@@ -126,7 +126,8 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         # spanning across two neighbor bins assuming ms bins [0,1),[1,2),...
         self.test_array_1d_0 = [
             1.3, 7.56, 15.87, 28.23, 30.9, 34.2, 38.2, 43.2]
-        self.test_array_1d_1 = [1.02, 2.71, 18.82, 28.46, 28.79, 43.6]
+        self.test_array_1d_1 = [
+            1.02, 2.71, 18.82, 28.46, 28.79, 43.6]
 
         # Build spike trains
         self.st_0 = neo.SpikeTrain(
@@ -147,40 +148,40 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
 
     def test_cross_correlation_histogram(self):
         '''
-        Test result of a cross-correlation histogram between two binned spike
-        trains.
+        Test generic result of a cross-correlation histogram between two binned
+        spike trains.
         '''
-        # Calculate clipped and unclipped
+        # Calculate CCH using Elephant (normal and binary version)
         result_clipped = sc.cross_correlation_histogram(
             self.binned_st1, self.binned_st2, window=None, binary=True)
         result_unclipped = sc.cross_correlation_histogram(
             self.binned_st1, self.binned_st2, window=None, binary=False)
 
-        # Check unclipped correlation
-        # Use numpy correlate to verify result. Note: numpy conventions for
-        # input array 1 and input array 2 are swapped compared to Elephant!
+        # Check normal correlation Note: Use numpy correlate to verify result.
+        # Note: numpy conventions for input array 1 and input array 2 are
+        # swapped compared to Elephant!
         mat1 = self.binned_st1.to_array()[0]
         mat2 = self.binned_st2.to_array()[0]
         target_numpy = np.correlate(mat2, mat1, mode='full')
         assert_array_equal(
             target_numpy, np.squeeze(result_unclipped[0].magnitude))
 
-        # Check clipped correlation
-        # Use numpy correlate to verify result. Note: numpy conventions for
-        # input array 1 and input array 2 are swapped compared to Elephant!
+        # Check correlation using binary spike trains
         mat1 = np.array(self.binned_st1.to_bool_array()[0], dtype=int)
         mat2 = np.array(self.binned_st2.to_bool_array()[0], dtype=int)
         target_numpy = np.correlate(mat2, mat1, mode='full')
         assert_array_equal(
             target_numpy, np.squeeze(result_clipped[0].magnitude))
 
-        # Check the time axis of the AnalogSignalArray
+        # Check the time axis of the resulting AnalogSignalArray
         assert_array_almost_equal(
-            result_clipped[1] * self.binned_st1.binsize,
+            (result_clipped[1] - 0.5) * self.binned_st1.binsize,
             result_unclipped[0].times)
         assert_array_almost_equal(
-            result_clipped[1] * self.binned_st1.binsize,
+            (result_clipped[1] - 0.5) * self.binned_st1.binsize,
             result_clipped[0].times)
+        print result_clipped[1] * self.binned_st1.binsize
+        print result_clipped[0].times
 
     def test_normalize_option(self):
         '''
@@ -196,14 +197,13 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         cch_len = len(result_norm[0])
         self.assertEqual(np.mod(cch_len, 2), 1)
 
+        # Check that central bin is 1
         center_bin = np.floor(cch_len / 2)
-        target_time = \
-            result_norm[0].times.magnitude[center_bin + 1] + \
-            result_norm[0].times.magnitude[center_bin - 1]
+        target_time = result_norm[0].times.magnitude[center_bin]
         target_value = result_norm[0].magnitude[center_bin]
 
         self.assertEqual(
-            target_time, 0)
+            target_time, -result_norm[0].sampling_period.magnitude / 2.)
         self.assertEqual(
             target_value, 1)
 

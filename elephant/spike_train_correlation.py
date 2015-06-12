@@ -192,22 +192,32 @@ def cross_correlation_histogram(
           * hamming: numpy.hamming(N)
           * hanning: numpy.hanning(N)
           * bartlett: numpy.bartlett(N)
-        If None is specified, the CCH is not smoothed
+        If None is specified, the CCH is not smoothed.
         Default: None
 
-   Returns
-   -------
-      returns the cross-correlation histogram between st1 and st2. The central
-      bin of the histogram represents correlation at zero delay. Offset bins
-      correspond to correlations at a delay equivalent to the difference
-      between the spike times of st1 and those of st2: an entry at positive
-      lags corresponds to a spike in st2 following a spike in st1 bins to the
-      right, and an entry at negative lags corresponds to a spike in st1
-      following a spike in st2.
-      To illustrate, consider the two spike trains:
-      st1: 0 0 0 0 1 0 0 0 0 0 0
-      st2: 0 0 0 0 0 0 0 1 0 0 0
-      Here, the CCH will have an entry of 1 at lag h=+3.
+    Returns
+    -------
+    cch
+          AnalogSignalArray containing the cross-correlation histogram between
+          st1 and st2.
+
+          The central bin of the histogram represents correlation at zero
+          delay. Offset bins correspond to correlations at a delay equivalent
+          to the difference between the spike times of st1 and those of st2: an
+          entry at positive lags corresponds to a spike in st2 following a
+          spike in st1 bins to the right, and an entry at negative lags
+          corresponds to a spike in st1 following a spike in st2.
+
+          To illustrate this definition, consider the two spike trains:
+          st1: 0 0 0 0 1 0 0 0 0 0 0
+          st2: 0 0 0 0 0 0 0 1 0 0 0
+          Here, the CCH will have an entry of 1 at lag h=+3.
+
+          Consistent with the definition of AnalogSignalArrays, the time axis
+          represents the left bin borders of each histogram bin. For example,
+          the time axis might be:
+          np.array([-2.5 -1.5 -0.5 0.5 1.5]) * ms
+
 
     Example
     -------
@@ -216,9 +226,10 @@ def cross_correlation_histogram(
     TODO:
     * output as AnalogSignal(DONE)
     * make function faster?
-    * more unit tests
+    * more unit tests(DONE)
     * variable renaming?
     * doc string completion
+    * Normalize before or after smoothing?
     *
     """
     if st1.binsize != st2.binsize:
@@ -241,9 +252,9 @@ def cross_correlation_histogram(
         st2_bin_counts_unique = st2_spmat.data
 
     # Define the half-length of the full crosscorrelogram
-    # TODO: What is correct
-    # here? Why +, not max? How can we have an entry beyond the maximum length
-    # of the array?
+    #
+    # TODO: What is correct here? Why +, not max? How can we have an entry
+    # beyond the maximum length of the array?
     Hlen = np.max([st1.num_bins, st2.num_bins]) - 1
     Len = 2 * Hlen + 1
     #Len = st1.num_bins + st2.num_bins - 1
@@ -290,11 +301,11 @@ def cross_correlation_histogram(
     if normalize:
         counts = np.array(counts, float) / float(counts[Hbins])
 
-    # Trasform the array count into an AnalogSignalArray
+    # Transform the array count into an AnalogSignalArray
     cch = neo.AnalogSignalArray(
         signal=counts.reshape(counts.size, 1),
         units=pq.dimensionless,
-        t_start=bin_ids[0] * st1.binsize,
+        t_start=(bin_ids[0] - 0.5) * st1.binsize,
         sampling_period=st1.binsize)
 
     # Return only the Hbins bins and counts before and after the central one

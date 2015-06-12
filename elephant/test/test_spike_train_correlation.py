@@ -142,6 +142,9 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         self.binned_st2 = conv.BinnedSpikeTrain(
             [self.st_1], t_start=0 * pq.ms, t_stop=50. * pq.ms,
             binsize=1 * pq.ms)
+        self.binned_st3 = conv.BinnedSpikeTrain(
+            [self.st_1], t_start=0 * pq.ms, t_stop=50. * pq.ms,
+            binsize=5 * pq.ms)
 
     def test_cross_correlation_histogram(self):
         '''
@@ -209,11 +212,8 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
             target_value, 1)
 
     def test_binsize(self):
-        '''Check that an exception is thrown if the two spike trains are not 
+        '''Check that an exception is thrown if the two spike trains are not
         binned with the same bin size.'''
-        self.binned_st3 = conv.BinnedSpikeTrain(
-            [self.st_1], t_start=0 * pq.ms, t_stop=50. * pq.ms,
-            binsize=5 * pq.ms)
         self.assertRaises(
             ValueError, sc.cch, self.binned_st1, self.binned_st3)
 

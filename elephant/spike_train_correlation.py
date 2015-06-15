@@ -260,7 +260,7 @@ def cross_correlation_histogram(
     """
     if st1.binsize != st2.binsize:
         raise ValueError(
-            "The spike trains have to be binned with the same bin size")
+            "Input spike trains must be binned with the same bin size")
 
     # Retrieve unclipped matrix
     st1_spmat = st1.to_sparse_array()

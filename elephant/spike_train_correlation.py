@@ -286,21 +286,20 @@ def cross_correlation_histogram(
     train is 0.
     """
 
-    def _cch_memory(st1, st2, window, normalize, border_correction, binary,
-                    kernel):
-        if st1.binsize != st2.binsize:
+    def _cch_memory(st_1, st_2, win, norm, border_corr, bin, kern):
+        if st_1.binsize != st_2.binsize:
             raise ValueError(
                 "Input spike trains must be binned with the same bin size")
 
         # Retrieve unclipped matrix
-        st1_spmat = st1.to_sparse_array()
-        st2_spmat = st2.to_sparse_array()
+        st1_spmat = st_1.to_sparse_array()
+        st2_spmat = st_2.to_sparse_array()
 
         # For each row, extract the nonzero column indices
         # and the corresponding # data in the matrix (for performance reasons)
         st1_bin_idx_unique = st1_spmat.nonzero()[1]
         st2_bin_idx_unique = st2_spmat.nonzero()[1]
-        if binary:
+        if bin:
             st1_bin_counts_unique = np.array(st1_spmat.data > 0, dtype=int)
             st2_bin_counts_unique = np.array(st2_spmat.data > 0, dtype=int)
         else:
@@ -311,14 +310,14 @@ def cross_correlation_histogram(
         #
         # TODO: What is correct here? Why +, not max? How can we have an entry
         # beyond the maximum length of the array?
-        hist_half_length = np.max([st1.num_bins, st2.num_bins]) - 1
+        hist_half_length = np.max([st_1.num_bins, st_2.num_bins]) - 1
         hist_length = 2 * hist_half_length + 1
-        # hist_length = st1.num_bins + st2.num_bins - 1
+        # hist_length = st_1.num_bins + st_2.num_bins - 1
         # hist_half_length = hist_length // 2
-        if window is None:
+        if win is None:
             hist_bins = hist_half_length
         else:
-            hist_bins = min(window, hist_half_length)
+            hist_bins = min(win, hist_half_length)
 
         # Initialize the counts to an array of zeroes,
         # and the bin IDs to integers
@@ -336,52 +335,78 @@ def cross_correlation_histogram(
 
         # Correct the values taking into account lacking contributes
         # at the edges
-        if border_correction is True:
+        if border_corr is True:
             correction = float(hist_half_length + 1) / np.array(
                 hist_half_length + 1 - abs(
                     np.arange(-hist_bins, hist_bins + 1)), float)
             counts = counts * correction
 
-        # Define the kernel for smoothing as an ndarray
-        if hasattr(kernel, '__iter__'):
-            if len(kernel) > hist_length:
+        # Define the kern for smoothing as an ndarray
+        if hasattr(kern, '__iter__'):
+            if len(kern) > hist_length:
                 raise ValueError(
                     'The length of the kernel cannot be larger than the '
                     'length %d of the resulting CCH.' % hist_length)
-            kernel = np.array(kernel, dtype=float)
-            kernel = 1. * kernel / sum(kernel)
-        elif kernel is not None:
+            kern = np.array(kern, dtype=float)
+            kern = 1. * kern / sum(kern)
+        elif kern is not None:
             raise ValueError('Invalid smoothing kernel.')
 
-        # Smooth the cross-correlation histogram with the kernel
-        if kernel is not None:
-            counts = np.convolve(counts, kernel, mode='same')
+        # Smooth the cross-correlation histogram with the kern
+        if kern is not None:
+            counts = np.convolve(counts, kern, mode='same')
 
         # Rescale the histogram so that the central bin has height 1,
         # if requested
-        if normalize:
+        if norm:
             counts = np.array(counts, float) / float(counts[hist_bins])
 
         # Transform the array count into an AnalogSignalArray
         cch = neo.AnalogSignalArray(
             signal=counts.reshape(counts.size, 1),
             units=pq.dimensionless,
-            t_start=(bin_ids[0] - 0.5) * st1.binsize,
-            sampling_period=st1.binsize)
+            t_start=(bin_ids[0] - 0.5) * st_1.binsize,
+            sampling_period=st_1.binsize)
 
         # Return only the hist_bins bins and counts before and after the
         # central one
         return cch, bin_ids
 
-    def _cch_fast(st1, st2, window, chance_corrected):
-        # TODO
-        pass
+    def _cch_fast(x, y, win, dt, chance_corr):
+            l, r = int(win[0] / dt), int(win[1] / dt)
+            # n = len(x)
+            # trim trains to have appropriate length of xcorr array
+            if l < 0:
+                y = y[-l:]
+            else:
+                x = x[l:]
+            y = y[:-r]
+            mx, my = x.mean(), y.mean()
+            # TODO: possibly use fftconvolve for faster calculation
+            # TODO: exchanged convolve by correlate -- good?
+            corr = np.convolve(x, y[::-1], 'valid')
+            # corr = np.correlate(x, y, 'valid')
+
+            # correct for chance coincidences
+            # mx = np.convolve(x, np.ones(len(y)), 'valid') / len(y)
+            corr = corr / np.sum(y)
+
+            if chance_corr:
+                corr = corr - mx
+
+            lags = np.r_[l:r + 1]
+            return lags * dt, corr
 
     if method is "memory":
         _cch_memory(st1, st2, window, normalize, border_correction, binary,
                     kernel)
     elif method is "speed":
-        _cch_fast(st1, st2, window, chance_corrected)
+        st1_arr = st1.to_array()[0, :]
+        st2_arr = st2.to_array()[0, :]
+
+        binsize = st1.binsize
+
+        _cch_fast(st1_arr, st2_arr, window, binsize, chance_corrected)
 
 # Alias for common abbreviation
 cch = cross_correlation_histogram

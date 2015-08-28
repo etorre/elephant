@@ -152,7 +152,7 @@ def corrcoef(binned_sts, binary=False):
 
 def cross_correlation_histogram(
         st1, st2, window=None, normalize=False, border_correction=False,
-        binary=False, kernel=None):
+        binary=False, kernel=None, chance_corrected=False, method="speed"):
     """
     Computes the cross-correlation histogram (CCH) between two binned spike
     trains st1 and st2.
@@ -196,6 +196,10 @@ def cross_correlation_histogram(
         and the result is normalize to the central bin. If None is specified,
         the CCH is not smoothed.
         Default: None
+    method : string (optional)
+        Defines the algorithm to use. "speed" uses numpy.convolve to calculate
+        the correlation, whereas "memory" uses an own implementation to
+        calculate the correlation, which is memory efficient but slower.
 
         TODO:
         * Normalize before or after smoothing -- is this good?
@@ -230,6 +234,8 @@ def cross_correlation_histogram(
     Example
     -------
         Plot the cross-correlation histogram between two Poisson spike trains
+        >>> import elephant
+        >>> import matplotlib.pyplot as plt
 
         >>> binned_st1 = elephant.conversion.BinnedSpikeTrain(
                 elephant.spike_train_generation.homogeneous_poisson_process(
@@ -257,88 +263,125 @@ def cross_correlation_histogram(
     Alias
     -----
     cch
+
+    Notes
+    -----
+    If method is set to `speed`:
+    The algorithm is implemented as a convolution between binned spike train.
+    We trim the spike trains according to the selected correlogram window.
+    This allows us to avoid edge effects due to undersampling of long
+    inter-spike intervals, but also removes some data from calculation, which
+    may be considerable amount for long windows. This method also improves
+    the performance since we do not have to calculate correlogram for all
+    possible lags, but only the selected ones.
+
+    *Normalisation*
+
+    By default normalisation is set such that for perfectly synchronised
+    spike train (same spike train passed in binned_st1 and binned_st2) the
+    maximum correlogram (at lag 0) is 1.
+
+    If the `chance_coincidences == True` than the expected coincidence rate is
+    subracted, such that the  expected correlogram for non-correlated spike
+    train is 0.
     """
-    if st1.binsize != st2.binsize:
-        raise ValueError(
-            "Input spike trains must be binned with the same bin size")
 
-    # Retrieve unclipped matrix
-    st1_spmat = st1.to_sparse_array()
-    st2_spmat = st2.to_sparse_array()
-
-    # For each row, extract the nonzero column indices and the corresponding
-    # data in the matrix (for performance reasons)
-    st1_bin_idx_unique = st1_spmat.nonzero()[1]
-    st2_bin_idx_unique = st2_spmat.nonzero()[1]
-    if binary:
-        st1_bin_counts_unique = np.array(st1_spmat.data > 0, dtype=int)
-        st2_bin_counts_unique = np.array(st2_spmat.data > 0, dtype=int)
-    else:
-        st1_bin_counts_unique = st1_spmat.data
-        st2_bin_counts_unique = st2_spmat.data
-
-    # Define the half-length of the full crosscorrelogram
-    #
-    # TODO: What is correct here? Why +, not max? How can we have an entry
-    # beyond the maximum length of the array?
-    hist_half_length = np.max([st1.num_bins, st2.num_bins]) - 1
-    hist_length = 2 * hist_half_length + 1
-    # hist_length = st1.num_bins + st2.num_bins - 1
-    # hist_half_length = hist_length // 2
-    if window is None:
-        hist_bins = hist_half_length
-    else:
-        hist_bins = min(window, hist_half_length)
-
-    # Initialize the counts to an array of zeroes, and the bin IDs to integers
-    # spanning the time axis
-    counts = np.zeros(2 * hist_bins + 1)
-    bin_ids = np.arange(-hist_bins, hist_bins + 1)
-    # Compute the CCH at lags in -hist_bins,...,hist_bins only
-    for r, i in enumerate(st1_bin_idx_unique):
-        timediff = st2_bin_idx_unique - i
-        timediff_in_range = np.all(
-            [timediff >= -hist_bins, timediff <= hist_bins], axis=0)
-        timediff = (timediff[timediff_in_range]).reshape((-1,))
-        counts[timediff + hist_bins] += st1_bin_counts_unique[r] * \
-            st2_bin_counts_unique[timediff_in_range]
-
-    # Correct the values taking into account lacking contributes at the edges
-    if border_correction is True:
-        correction = float(hist_half_length + 1) / np.array(
-            hist_half_length + 1 - abs(np.arange(-hist_bins, hist_bins + 1)),
-            float)
-        counts = counts * correction
-
-    # Define the kernel for smoothing as an ndarray
-    if hasattr(kernel, '__iter__'):
-        if len(kernel) > hist_length:
+    def _cch_memory(st1, st2, window, normalize, border_correction, binary,
+                    kernel):
+        if st1.binsize != st2.binsize:
             raise ValueError(
-                'The length of the kernel cannot be larger than the '
-                'length %d of the resulting CCH.' % hist_length)
-        kernel = np.array(kernel, dtype=float)
-        kernel = 1. * kernel / sum(kernel)
-    elif kernel is not None:
-        raise ValueError('Invalid smoothing kernel.')
+                "Input spike trains must be binned with the same bin size")
 
-    # Smooth the cross-correlation histogram with the kernel
-    if kernel is not None:
-        counts = np.convolve(counts, kernel, mode='same')
+        # Retrieve unclipped matrix
+        st1_spmat = st1.to_sparse_array()
+        st2_spmat = st2.to_sparse_array()
 
-    # Rescale the histogram so that the central bin has height 1, if requested
-    if normalize:
-        counts = np.array(counts, float) / float(counts[hist_bins])
+        # For each row, extract the nonzero column indices
+        # and the corresponding # data in the matrix (for performance reasons)
+        st1_bin_idx_unique = st1_spmat.nonzero()[1]
+        st2_bin_idx_unique = st2_spmat.nonzero()[1]
+        if binary:
+            st1_bin_counts_unique = np.array(st1_spmat.data > 0, dtype=int)
+            st2_bin_counts_unique = np.array(st2_spmat.data > 0, dtype=int)
+        else:
+            st1_bin_counts_unique = st1_spmat.data
+            st2_bin_counts_unique = st2_spmat.data
 
-    # Transform the array count into an AnalogSignalArray
-    cch = neo.AnalogSignalArray(
-        signal=counts.reshape(counts.size, 1),
-        units=pq.dimensionless,
-        t_start=(bin_ids[0] - 0.5) * st1.binsize,
-        sampling_period=st1.binsize)
+        # Define the half-length of the full crosscorrelogram
+        #
+        # TODO: What is correct here? Why +, not max? How can we have an entry
+        # beyond the maximum length of the array?
+        hist_half_length = np.max([st1.num_bins, st2.num_bins]) - 1
+        hist_length = 2 * hist_half_length + 1
+        # hist_length = st1.num_bins + st2.num_bins - 1
+        # hist_half_length = hist_length // 2
+        if window is None:
+            hist_bins = hist_half_length
+        else:
+            hist_bins = min(window, hist_half_length)
 
-    # Return only the hist_bins bins and counts before and after the central
-    # one
-    return cch, bin_ids
+        # Initialize the counts to an array of zeroes,
+        # and the bin IDs to integers
+        # spanning the time axis
+        counts = np.zeros(2 * hist_bins + 1)
+        bin_ids = np.arange(-hist_bins, hist_bins + 1)
+        # Compute the CCH at lags in -hist_bins,...,hist_bins only
+        for r, i in enumerate(st1_bin_idx_unique):
+            timediff = st2_bin_idx_unique - i
+            timediff_in_range = np.all(
+                [timediff >= -hist_bins, timediff <= hist_bins], axis=0)
+            timediff = (timediff[timediff_in_range]).reshape((-1,))
+            counts[timediff + hist_bins] += st1_bin_counts_unique[r] * \
+                st2_bin_counts_unique[timediff_in_range]
+
+        # Correct the values taking into account lacking contributes
+        # at the edges
+        if border_correction is True:
+            correction = float(hist_half_length + 1) / np.array(
+                hist_half_length + 1 - abs(
+                    np.arange(-hist_bins, hist_bins + 1)), float)
+            counts = counts * correction
+
+        # Define the kernel for smoothing as an ndarray
+        if hasattr(kernel, '__iter__'):
+            if len(kernel) > hist_length:
+                raise ValueError(
+                    'The length of the kernel cannot be larger than the '
+                    'length %d of the resulting CCH.' % hist_length)
+            kernel = np.array(kernel, dtype=float)
+            kernel = 1. * kernel / sum(kernel)
+        elif kernel is not None:
+            raise ValueError('Invalid smoothing kernel.')
+
+        # Smooth the cross-correlation histogram with the kernel
+        if kernel is not None:
+            counts = np.convolve(counts, kernel, mode='same')
+
+        # Rescale the histogram so that the central bin has height 1,
+        # if requested
+        if normalize:
+            counts = np.array(counts, float) / float(counts[hist_bins])
+
+        # Transform the array count into an AnalogSignalArray
+        cch = neo.AnalogSignalArray(
+            signal=counts.reshape(counts.size, 1),
+            units=pq.dimensionless,
+            t_start=(bin_ids[0] - 0.5) * st1.binsize,
+            sampling_period=st1.binsize)
+
+        # Return only the hist_bins bins and counts before and after the
+        # central one
+        return cch, bin_ids
+
+    def _cch_fast(st1, st2, window, chance_corrected):
+        # TODO
+        pass
+
+    if method is "memory":
+        _cch_memory(st1, st2, window, normalize, border_correction, binary,
+                    kernel)
+    elif method is "speed":
+        _cch_fast(st1, st2, window, chance_corrected)
 
 # Alias for common abbreviation
 cch = cross_correlation_histogram

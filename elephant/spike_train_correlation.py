@@ -152,7 +152,8 @@ def corrcoef(binned_sts, binary=False):
 
 def cross_correlation_histogram(
         st1, st2, window=None, normalize=False, border_correction=False,
-        binary=False, kernel=None, chance_corrected=False, method="speed"):
+        binary=False, kernel=None, chance_corrected=False, method="speed",
+        **kwargs):
     """
     Computes the cross-correlation histogram (CCH) between two binned spike
     trains st1 and st2.
@@ -201,6 +202,11 @@ def cross_correlation_histogram(
         the correlation, whereas "memory" uses an own implementation to
         calculate the correlation, which is memory efficient but slower.
 
+    kwargs :
+    border_normalisation: bool
+        For memory mode
+        Normalisation for of border bins by cutting bins at the border
+
         TODO:
         * Normalize before or after smoothing -- is this good?
 
@@ -246,7 +252,7 @@ def cross_correlation_histogram(
                     10. * pq.Hz, t_start=0 * pq.ms, t_stop=2000 * pq.s),
                 binsize=1. * pq.ms)
 
-        >>> cc_hist = cross_correlation_histogram(
+        >>> cc_hist = elephant.spike_train_correlation.cross_correlation_histogram(
                 binned_st1, binned_st2, window=20,
                 normalize=True, border_correction=False,
                 binary=False, kernel=None)
@@ -372,7 +378,7 @@ def cross_correlation_histogram(
         # central one
         return cch, bin_ids
 
-    def _cch_fast(x, y, win, dt, chance_corr):
+    def _cch_fast(x, y, win, dt, chance_corr, kern):
             l, r = int(win[0] / dt), int(win[1] / dt)
             # n = len(x)
             # trim trains to have appropriate length of xcorr array
@@ -383,7 +389,7 @@ def cross_correlation_histogram(
             y = y[:-r]
             mx, my = x.mean(), y.mean()
             # TODO: possibly use fftconvolve for faster calculation
-            # TODO: exchanged convolve by correlate -- good?
+            # TODO: exchange convolve by correlate -- good?
             corr = np.convolve(x, y[::-1], 'valid')
             # corr = np.correlate(x, y, 'valid')
 
@@ -395,6 +401,23 @@ def cross_correlation_histogram(
                 corr = corr - mx
 
             lags = np.r_[l:r + 1]
+
+            # Kernel smoothing
+            # TODO make function?
+            if hasattr(kern, '__iter__'):
+                if len(kern) > lags:
+                    raise ValueError(
+                        'The length of the kernel cannot be larger than the '
+                        'length %d of the resulting CCH.' % lags)
+                kern = np.array(kern, dtype=float)
+                kern = 1. * kern / np.sum(kern)
+            elif kern is not None:
+                raise ValueError('Invalid smoothing kernel.')
+
+            # Smooth the cross-correlation histogram with the kern
+            if kern is not None:
+                corr = np.convolve(corr, kern, mode='same')
+
             return lags * dt, corr
 
     if method is "memory":
@@ -423,7 +446,7 @@ def btel_crosscorrelogram(binned_st1, binned_st2, win, chance_corrected=False):
         A binned spike train containing the 'post-synaptic' spikes.
     binned_st2 : elephant.conversion.BinnedSpikeTrain
         A binned spike train containing the reference ('pre-synaptic') spikes.
-    win : sequence of lenght 2
+    win : sequence of length 2
         Window in which the correlogram will be correlated (minimum, maximum
         lag)
     chance_corrected : bool, default True

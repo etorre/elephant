@@ -152,7 +152,7 @@ def corrcoef(binned_sts, binary=False):
 
 def cross_correlation_histogram(
         st1, st2, window=None, normalize=False, border_correction=False,
-        binary=False, kernel=None, chance_corrected=False, method="speed",
+        binary=False, kernel=None, chance_corrected=False, method="memory",
         **kwargs):
     """
     Computes the cross-correlation histogram (CCH) between two binned spike
@@ -292,7 +292,7 @@ def cross_correlation_histogram(
     train is 0.
     """
 
-    def _cch_memory(st_1, st_2, win, norm, border_corr, bin, kern):
+    def _cch_memory(st_1, st_2, win, norm, border_corr, binary, kern):
         if st_1.binsize != st_2.binsize:
             raise ValueError(
                 "Input spike trains must be binned with the same bin size")
@@ -300,12 +300,19 @@ def cross_correlation_histogram(
         # Retrieve unclipped matrix
         st1_spmat = st_1.to_sparse_array()
         st2_spmat = st_2.to_sparse_array()
+        binsize = st_1.binsize
+
+        if win is not None:
+            l, r = int(win[0] / binsize), int(win[1] / binsize)
+        else:
+            l = -st_1.num_bins
+            r = -l
 
         # For each row, extract the nonzero column indices
         # and the corresponding # data in the matrix (for performance reasons)
         st1_bin_idx_unique = st1_spmat.nonzero()[1]
         st2_bin_idx_unique = st2_spmat.nonzero()[1]
-        if bin:
+        if binary:
             st1_bin_counts_unique = np.array(st1_spmat.data > 0, dtype=int)
             st2_bin_counts_unique = np.array(st2_spmat.data > 0, dtype=int)
         else:
@@ -320,23 +327,21 @@ def cross_correlation_histogram(
         hist_length = 2 * hist_half_length + 1
         # hist_length = st_1.num_bins + st_2.num_bins - 1
         # hist_half_length = hist_length // 2
-        if win is None:
-            hist_bins = hist_half_length
-        else:
-            hist_bins = min(win, hist_half_length)
 
         # Initialize the counts to an array of zeroes,
         # and the bin IDs to integers
         # spanning the time axis
-        counts = np.zeros(2 * hist_bins + 1)
-        bin_ids = np.arange(-hist_bins, hist_bins + 1)
+        counts = np.zeros(np.abs(l) + np.abs(r) + 1)
+        # counts = np.zeros(2 * hist_bins + 1)
+        bin_ids = np.arange(l, r + 1)
+        # bin_ids = np.arange(-hist_bins, hist_bins + 1)
         # Compute the CCH at lags in -hist_bins,...,hist_bins only
-        for r, i in enumerate(st1_bin_idx_unique):
+        for idx, i in enumerate(st1_bin_idx_unique):
             timediff = st2_bin_idx_unique - i
             timediff_in_range = np.all(
-                [timediff >= -hist_bins, timediff <= hist_bins], axis=0)
+                [timediff >= l, timediff <= r], axis=0)
             timediff = (timediff[timediff_in_range]).reshape((-1,))
-            counts[timediff + hist_bins] += st1_bin_counts_unique[r] * \
+            counts[timediff + np.abs(l)] += st1_bin_counts_unique[idx] * \
                 st2_bin_counts_unique[timediff_in_range]
 
         # Correct the values taking into account lacking contributes
@@ -344,7 +349,7 @@ def cross_correlation_histogram(
         if border_corr is True:
             correction = float(hist_half_length + 1) / np.array(
                 hist_half_length + 1 - abs(
-                    np.arange(-hist_bins, hist_bins + 1)), float)
+                    np.arange(l, r + 1)), float)
             counts = counts * correction
 
         # Define the kern for smoothing as an ndarray
@@ -365,10 +370,10 @@ def cross_correlation_histogram(
         # Rescale the histogram so that the central bin has height 1,
         # if requested
         if norm:
-            counts = np.array(counts, float) / float(counts[hist_bins])
+            counts = np.array(counts, float) / float(counts[np.abs(l)])
 
         # Transform the array count into an AnalogSignalArray
-        cch = neo.AnalogSignalArray(
+        cch_result = neo.AnalogSignalArray(
             signal=counts.reshape(counts.size, 1),
             units=pq.dimensionless,
             t_start=(bin_ids[0] - 0.5) * st_1.binsize,
@@ -376,10 +381,10 @@ def cross_correlation_histogram(
 
         # Return only the hist_bins bins and counts before and after the
         # central one
-        return cch, bin_ids
+        return cch_result, bin_ids
 
-    def _cch_fast(x, y, win, dt, chance_corr, kern):
-            l, r = int(win[0] / dt), int(win[1] / dt)
+    def _cch_fast(x, y, win, binsize, chance_corr, kern):
+            l, r = int(win[0] / binsize), int(win[1] / binsize)
             # n = len(x)
             # trim trains to have appropriate length of xcorr array
             if l < 0:
@@ -418,7 +423,7 @@ def cross_correlation_histogram(
             if kern is not None:
                 corr = np.convolve(corr, kern, mode='same')
 
-            return lags * dt, corr
+            return lags * binsize, corr
 
     if method is "memory":
         _cch_memory(st1, st2, window, normalize, border_correction, binary,

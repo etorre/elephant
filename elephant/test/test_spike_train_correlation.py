@@ -215,11 +215,11 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
     def test_window(self):
         '''Test if the window parameter is correctly interpreted.'''
         _, bin_ids = sc.cch(
-            self.binned_st1, self.binned_st2, window=30)
+            self.binned_st1, self.binned_st2, window=[-15, 15])
         assert_array_equal(bin_ids, np.arange(-30, 31, 1))
 
         _, bin_ids = sc.cch(
-            self.binned_st1, self.binned_st2, normalize=True, window=30)
+            self.binned_st1, self.binned_st2, normalize=True, window=[-15, 15])
         assert_array_equal(bin_ids, np.arange(-30, 31, 1))
 
     def test_border_correction(self):
@@ -264,7 +264,7 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
             chance_corrected=False)
         cch_inm, bin_ids_inm = sc.cross_correlation_histogram(
             self.binned_st1, self.binned_st2,
-            window=10,
+            window=[-5, 5],
             border_correction=False, normalize=False, binary=False)
 
         print(len(cch_btel))

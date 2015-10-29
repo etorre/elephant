@@ -378,7 +378,6 @@ def cross_correlation_histogram(
             units=pq.dimensionless,
             t_start=(bin_ids[0] - 0.5) * st_1.binsize,
             sampling_period=st_1.binsize)
-
         # Return only the hist_bins bins and counts before and after the
         # central one
         return cch_result, bin_ids
@@ -426,15 +425,18 @@ def cross_correlation_histogram(
             return lags * binsize, corr
 
     if method is "memory":
-        _cch_memory(st1, st2, window, normalize, border_correction, binary,
-                    kernel)
+        cch_result, bin_ids = _cch_memory(
+            st1, st2, window, normalize, border_correction, binary, kernel)
     elif method is "speed":
         st1_arr = st1.to_array()[0, :]
         st2_arr = st2.to_array()[0, :]
 
         binsize = st1.binsize
 
-        _cch_fast(st1_arr, st2_arr, window, binsize, chance_corrected)
+        cch_result, bin_ids = _cch_fast(
+            st1_arr, st2_arr, window, binsize, chance_corrected)
+
+    return cch_result, bin_ids
 
 # Alias for common abbreviation
 cch = cross_correlation_histogram

@@ -303,9 +303,17 @@ def cross_correlation_histogram(
         binsize = st_1.binsize
 
         if win is not None:
-            l, r = int(win[0] / binsize), int(win[1] / binsize)
+            if isinstance(win[0], int) and isinstance(win[1], int):
+                l, r = win[0], win[1]
+            else:
+                if int(win[0] % binsize) != 0 or int(win[0] % binsize) != 0:
+                    raise ValueError(
+                        'The window has to be a multiple of the binsize')
+                l, r = int(win[0].rescale(binsize.units) / binsize), int(
+                    win[1].rescale(binsize.units) / binsize)
+
         else:
-            l = -st_1.num_bins
+            l = -st_1.num_bins + 1
             r = -l
 
         # For each row, extract the nonzero column indices

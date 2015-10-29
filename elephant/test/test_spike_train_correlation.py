@@ -218,8 +218,8 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
             self.binned_st1, self.binned_st2, window=[-30, 30])
         assert_array_equal(bin_ids, np.arange(-30, 31, 1))
         _, bin_ids = sc.cch(
-            self.binned_st1, self.binned_st2, window=[-5*pq.s, 5*pq.s])
-        assert_array_equal(bin_ids, np.arange(-5000, 5001, 1))
+            self.binned_st1, self.binned_st2, window=[-25*pq.ms, 25*pq.ms])
+        assert_array_equal(bin_ids, np.arange(-25, 26, 1))
         _, bin_ids = sc.cch(
             self.binned_st1, self.binned_st2, normalize=True, window=[-30, 30])
         assert_array_equal(bin_ids, np.arange(-30, 31, 1))

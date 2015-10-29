@@ -301,19 +301,27 @@ def cross_correlation_histogram(
         st1_spmat = st_1.to_sparse_array()
         st2_spmat = st_2.to_sparse_array()
         binsize = st_1.binsize
+        tot_bins = max(st_1.num_bins, st_2.num_bins)
 
         if win is not None:
             if isinstance(win[0], int) and isinstance(win[1], int):
+                if win[0] >= win[1] or win[0] <= -tot_bins or win[1] >= tot_bins:
+                    raise ValueError("The window exceed the length of the"
+                    + " spike trains" )
                 l, r = win[0], win[1]
             else:
                 if int(win[0] % binsize) != 0 or int(win[0] % binsize) != 0:
                     raise ValueError(
-                        'The window has to be a multiple of the binsize')
+                        "The window has to be a multiple of the binsize")
+                if win[0] >= win[1] or win[0] <= -tot_bins * binsize or win[1] >= tot_bins * binsize:
+                    print tot_bins * binsize
+                    raise ValueError("The window exceed the length of the"
+                    + " spike trains" )
                 l, r = int(win[0].rescale(binsize.units) / binsize), int(
                     win[1].rescale(binsize.units) / binsize)
 
         else:
-            l = -st_1.num_bins + 1
+            l = -tot_bins + 1
             r = -l
 
         # For each row, extract the nonzero column indices

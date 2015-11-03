@@ -313,10 +313,10 @@ def cross_correlation_histogram(
                 if int(win[0] % binsize) != 0 or int(win[0] % binsize) != 0:
                     raise ValueError(
                         "The window has to be a multiple of the binsize")
-                if win[0] >= win[1] or win[0] <= -tot_bins * binsize or win[1] >= tot_bins * binsize:
-                    print tot_bins * binsize
+                if win[0] >= win[1] or win[0] <= -tot_bins * binsize \
+                        or win[1] >= tot_bins * binsize:
                     raise ValueError("The window exceed the length of the"
-                    + " spike trains" )
+                                     " spike trains")
                 l, r = int(win[0].rescale(binsize.units) / binsize), int(
                     win[1].rescale(binsize.units) / binsize)
 
@@ -399,46 +399,47 @@ def cross_correlation_histogram(
         return cch_result, bin_ids
 
     def _cch_fast(x, y, win, binsize, chance_corr, kern):
-            l, r = int(win[0] / binsize), int(win[1] / binsize)
-            # n = len(x)
-            # trim trains to have appropriate length of xcorr array
-            if l < 0:
-                y = y[-l:]
-            else:
-                x = x[l:]
-            y = y[:-r]
-            mx, my = x.mean(), y.mean()
-            # TODO: possibly use fftconvolve for faster calculation
-            # TODO: exchange convolve by correlate -- good?
-            corr = np.convolve(x, y[::-1], 'valid')
-            # corr = np.correlate(x, y, 'valid')
 
-            # correct for chance coincidences
-            # mx = np.convolve(x, np.ones(len(y)), 'valid') / len(y)
-            corr = corr / np.sum(y)
+        l, r = int(win[0] / binsize), int(win[1] / binsize)
+        # n = len(x)
+        # trim trains to have appropriate length of xcorr array
+        if l < 0:
+            y = y[-l:]
+        else:
+            x = x[l:]
+        y = y[:-r]
+        mx, my = x.mean(), y.mean()
+        # TODO: possibly use fftconvolve for faster calculation
+        # TODO: exchange convolve by correlate -- good?
+        corr = np.convolve(x, y[::-1], 'valid')
+        # corr = np.correlate(x, y, 'valid')
 
-            if chance_corr:
-                corr = corr - mx
+        # correct for chance coincidences
+        # mx = np.convolve(x, np.ones(len(y)), 'valid') / len(y)
+        corr = corr / np.sum(y)
 
-            lags = np.r_[l:r + 1]
+        if chance_corr:
+            corr = corr - mx
 
-            # Kernel smoothing
-            # TODO make function?
-            if hasattr(kern, '__iter__'):
-                if len(kern) > lags:
-                    raise ValueError(
-                        'The length of the kernel cannot be larger than the '
-                        'length %d of the resulting CCH.' % lags)
-                kern = np.array(kern, dtype=float)
-                kern = 1. * kern / np.sum(kern)
-            elif kern is not None:
-                raise ValueError('Invalid smoothing kernel.')
+        lags = np.r_[l:r + 1]
 
-            # Smooth the cross-correlation histogram with the kern
-            if kern is not None:
-                corr = np.convolve(corr, kern, mode='same')
+        # Kernel smoothing
+        # TODO make function?
+        if hasattr(kern, '__iter__'):
+            if len(kern) > lags:
+                raise ValueError(
+                    'The length of the kernel cannot be larger than the '
+                    'length %d of the resulting CCH.' % lags)
+            kern = np.array(kern, dtype=float)
+            kern = 1. * kern / np.sum(kern)
+        elif kern is not None:
+            raise ValueError('Invalid smoothing kernel.')
 
-            return lags * binsize, corr
+        # Smooth the cross-correlation histogram with the kern
+        if kern is not None:
+            corr = np.convolve(corr, kern, mode='same')
+
+        return lags * binsize, corr
 
     if method is "memory":
         cch_result, bin_ids = _cch_memory(
@@ -450,7 +451,7 @@ def cross_correlation_histogram(
         binsize = st1.binsize
 
         cch_result, bin_ids = _cch_fast(
-            st1_arr, st2_arr, window, binsize, chance_corrected)
+            st1_arr, st2_arr, window, binsize, chance_corrected, kernel)
 
     return cch_result, bin_ids
 

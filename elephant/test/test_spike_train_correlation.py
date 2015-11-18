@@ -131,13 +131,13 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
 
         # Build spike trains
         self.st_0 = neo.SpikeTrain(
-            self.test_array_1d_0, units='ms', t_stop=50.)
+            self.test_array_1d_0, units='ms', t_stop=45.)
         self.st_1 = neo.SpikeTrain(
             self.test_array_1d_1, units='ms', t_stop=50.)
 
         # And binned counterparts
         self.binned_st1 = conv.BinnedSpikeTrain(
-            [self.st_0], t_start=0 * pq.ms, t_stop=50. * pq.ms,
+            [self.st_0], t_start=0 * pq.ms, t_stop=45. * pq.ms,
             binsize=1 * pq.ms)
         self.binned_st2 = conv.BinnedSpikeTrain(
             [self.st_1], t_start=0 * pq.ms, t_stop=50. * pq.ms,
@@ -221,23 +221,17 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         normalization turned on.
         '''
         # Calculate normalized and raw cch
-        cch_norm, _ = sc.cross_correlation_histogram(
+        cch_norm, bins = sc.cross_correlation_histogram(
             self.binned_st1, self.binned_st2, window=None, binary=False,
             normalize=True)
 
-        # Check that length of CCH is uneven
-        cch_len = len(cch_norm)
-        self.assertEqual(np.mod(cch_len, 2), 1)
-
         # Check that central bin is 1
-        center_bin = np.floor(cch_len / 2)
+        center_bin = np.where(bins == 0)
         target_time = cch_norm.times.magnitude[center_bin]
         target_value = cch_norm.magnitude[center_bin]
 
-        self.assertEqual(
-            target_time, -cch_norm.sampling_period.magnitude / 2.)
-        self.assertEqual(
-            target_value, 1)
+        self.assertEqual(target_time, -0.5*self.binned_st1.binsize)
+        self.assertEqual(target_value, 1)
 
     def test_binsize(self):
         '''Check that an exception is thrown if the two spike trains are not

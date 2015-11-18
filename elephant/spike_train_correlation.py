@@ -151,9 +151,9 @@ def corrcoef(binned_sts, binary=False):
 
 
 def cross_correlation_histogram(
-        st1, st2, mode='full', window=None, normalize=False, border_correction=False,
-        binary=False, kernel=None, chance_corrected=False, method="memory",
-        **kwargs):
+        st1, st2, mode='full', window=None, normalize=False,
+        border_correction=False, binary=False, kernel=None,
+        chance_corrected=False, method="memory", **kwargs):
     """
     Computes the cross-correlation histogram (CCH) between two binned spike
     trains st1 and st2.
@@ -162,6 +162,15 @@ def cross_correlation_histogram(
     ----------
     st1,st2 : BinnedSpikeTrain
         Binned spike trains to cross-correlate.
+    mode: string (optional)
+        ‘full’: This returns the crosscorrelation at each point of overlap,
+        with an output shape of (N+M-1,). At the end-points of the
+        cross-correlogram, the signals do not overlap completely, and
+        boundary effects may be seen.
+        ‘valid’: Mode valid returns output of length max(M, N) - min(M, N) + 1.
+        The cross-correlation product is only given for points where the
+        signals overlap completely.
+        Values outside the signal boundary have no effect.
     window : int or None (optional)
         histogram half-length. If specified, the cross-correlation histogram
         has a number of bins equal to 2*window+1 (up to the maximum length).
@@ -334,13 +343,13 @@ def cross_correlation_histogram(
             # cch computed for all the possible entries
             if mode == 'full':
                 # Assign left and right edges of the cch
-                r = st_1.num_bins - 1
-                l = - st_2.num_bins + 1
+                r = st_2.num_bins - 1
+                l = - st_1.num_bins + 1
             # cch compute only for the entries that completely overlap
             elif mode == 'valid':
                 # Assign left and right edges of the cch
-                r = np.max(st_1.num_bins - st_2.num_bins, 0)
-                l = np.min(st_1.num_bins - st_2.num_bins, 0)
+                r = max(st_2.num_bins - st_1.num_bins, 0)
+                l = min(st_2.num_bins - st_1.num_bins, 0)
             # Check the mode parameter
             else:
                 raise ValueError(

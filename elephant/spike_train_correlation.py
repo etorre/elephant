@@ -151,7 +151,7 @@ def corrcoef(binned_sts, binary=False):
 
 
 def cross_correlation_histogram(
-        st1, st2, window=None, normalize=False, border_correction=False,
+        st1, st2, mode='full', window=None, normalize=False, border_correction=False,
         binary=False, kernel=None, chance_corrected=False, method="memory",
         **kwargs):
     """
@@ -292,7 +292,7 @@ def cross_correlation_histogram(
     train is 0.
     """
 
-    def _cch_memory(st_1, st_2, win, norm, border_corr, binary, kern):
+    def _cch_memory(st_1, st_2, win, mode, norm, border_corr, binary, kern):
         if st_1.binsize != st_2.binsize:
             raise ValueError(
                 "Input spike trains must be binned with the same bin size")
@@ -301,57 +301,72 @@ def cross_correlation_histogram(
         st1_spmat = st_1.to_sparse_array()
         st2_spmat = st_2.to_sparse_array()
         binsize = st_1.binsize
-        tot_bins = max(st_1.num_bins, st_2.num_bins)
+        max_num_bins = max(st_1.num_bins, st_2.num_bins)
 
+        # Set the time window in which the piketrains is compute the cch
         if win is not None:
+            # Window parameter given in number of bins (integer)
             if isinstance(win[0], int) and isinstance(win[1], int):
-                if win[0] >= win[1] or win[0] <= -tot_bins or win[1] >= tot_bins:
-                    raise ValueError("The window exceed the length of the"
-                    + " spike trains" )
+                # Check the window parameter values
+                if win[0] >= win[1] or win[0] <= -max_num_bins \
+                        or win[1] >= max_num_bins:
+                    raise ValueError(
+                        "The window exceed the length of the spike trains")
+                # Assign left and right edges of the cch
                 l, r = win[0], win[1]
+            # Window parameter given in time units
             else:
-                if int(win[0] % binsize) != 0 or int(win[0] % binsize) != 0:
+                # Check the window parameter values
+                if win[0].rescale(binsize.units).magnitude % \
+                    binsize.magnitude != 0 or win[1].rescale(
+                        binsize.units).magnitude % binsize.magnitude != 0:
                     raise ValueError(
                         "The window has to be a multiple of the binsize")
-                if win[0] >= win[1] or win[0] <= -tot_bins * binsize \
-                        or win[1] >= tot_bins * binsize:
+                if win[0] >= win[1] or win[0] <= -max_num_bins * binsize \
+                        or win[1] >= max_num_bins * binsize:
                     raise ValueError("The window exceed the length of the"
                                      " spike trains")
+                # Assign left and right edges of the cch
                 l, r = int(win[0].rescale(binsize.units) / binsize), int(
                     win[1].rescale(binsize.units) / binsize)
-
+        # Case without explicit window parameter
         else:
-            l = -tot_bins + 1
-            r = -l
+            # cch computed for all the possible entries
+            if mode == 'full':
+                # Assign left and right edges of the cch
+                r = st_1.num_bins - 1
+                l = - st_2.num_bins + 1
+            # cch compute only for the entries that completely overlap
+            elif mode == 'valid':
+                # Assign left and right edges of the cch
+                r = np.max(st_1.num_bins - st_2.num_bins, 0)
+                l = np.min(st_1.num_bins - st_2.num_bins, 0)
+            # Check the mode parameter
+            else:
+                raise ValueError(
+                    "The possible entries for mode parameter are" +
+                    "'full' and 'valid'")
 
         # For each row, extract the nonzero column indices
         # and the corresponding # data in the matrix (for performance reasons)
         st1_bin_idx_unique = st1_spmat.nonzero()[1]
         st2_bin_idx_unique = st2_spmat.nonzero()[1]
+
+        # Case with binary entries
         if binary:
             st1_bin_counts_unique = np.array(st1_spmat.data > 0, dtype=int)
             st2_bin_counts_unique = np.array(st2_spmat.data > 0, dtype=int)
+        # Case with all values
         else:
             st1_bin_counts_unique = st1_spmat.data
             st2_bin_counts_unique = st2_spmat.data
-
-        # Define the half-length of the full crosscorrelogram
-        #
-        # TODO: What is correct here? Why +, not max? How can we have an entry
-        # beyond the maximum length of the array?
-        hist_half_length = np.max([st_1.num_bins, st_2.num_bins]) - 1
-        hist_length = 2 * hist_half_length + 1
-        # hist_length = st_1.num_bins + st_2.num_bins - 1
-        # hist_half_length = hist_length // 2
 
         # Initialize the counts to an array of zeroes,
         # and the bin IDs to integers
         # spanning the time axis
         counts = np.zeros(np.abs(l) + np.abs(r) + 1)
-        # counts = np.zeros(2 * hist_bins + 1)
         bin_ids = np.arange(l, r + 1)
-        # bin_ids = np.arange(-hist_bins, hist_bins + 1)
-        # Compute the CCH at lags in -hist_bins,...,hist_bins only
+        # Compute the CCH at lags in l,...,r only
         for idx, i in enumerate(st1_bin_idx_unique):
             timediff = st2_bin_idx_unique - i
             timediff_in_range = np.all(
@@ -363,19 +378,21 @@ def cross_correlation_histogram(
         # Correct the values taking into account lacking contributes
         # at the edges
         if border_corr is True:
-            correction = float(hist_half_length + 1) / np.array(
-                hist_half_length + 1 - abs(
+            correction = float(max_num_bins + 1) / np.array(
+                max_num_bins + 1 - abs(
                     np.arange(l, r + 1)), float)
             counts = counts * correction
 
         # Define the kern for smoothing as an ndarray
         if hasattr(kern, '__iter__'):
-            if len(kern) > hist_length:
+            if len(kern) > np.abs(l) + np.abs(r) + 1:
                 raise ValueError(
                     'The length of the kernel cannot be larger than the '
-                    'length %d of the resulting CCH.' % hist_length)
+                    'length %d of the resulting CCH.' % (
+                        np.abs(l) + np.abs(r) + 1))
             kern = np.array(kern, dtype=float)
             kern = 1. * kern / sum(kern)
+        # Check kern parameter
         elif kern is not None:
             raise ValueError('Invalid smoothing kernel.')
 
@@ -443,7 +460,7 @@ def cross_correlation_histogram(
 
     if method is "memory":
         cch_result, bin_ids = _cch_memory(
-            st1, st2, window, normalize, border_correction, binary, kernel)
+            st1, st2, window, mode, normalize, border_correction, binary, kernel)
     elif method is "speed":
         st1_arr = st1.to_array()[0, :]
         st2_arr = st2.to_array()[0, :]

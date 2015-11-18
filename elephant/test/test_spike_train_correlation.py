@@ -151,11 +151,14 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         Test generic result of a cross-correlation histogram between two binned
         spike trains.
         '''
-        # Calculate CCH using Elephant (normal and binary version)
+        # Calculate CCH using Elephant (normal and binary version) with
+        # mode equal to 'full' (whole spike trains are correlated)
         cch_clipped, bin_ids_clipped = sc.cross_correlation_histogram(
-            self.binned_st1, self.binned_st2, window=None, binary=True)
+            self.binned_st1, self.binned_st2, mode='full', window=None,
+            binary=True)
         cch_unclipped, bin_ids_unclipped = sc.cross_correlation_histogram(
-            self.binned_st1, self.binned_st2, window=None, binary=False)
+            self.binned_st1, self.binned_st2, mode='full', window=None,
+            binary=False)
 
         # Check normal correlation Note: Use numpy correlate to verify result.
         # Note: numpy conventions for input array 1 and input array 2 are
@@ -172,6 +175,37 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         target_numpy = np.correlate(mat2, mat1, mode='full')
         assert_array_equal(
             target_numpy, np.squeeze(cch_clipped.magnitude))
+
+        # Calculate CCH using Elephant (normal and binary version) with
+        # mode equal to 'valid' (only completely overlapping intervals of the
+        # spike trains are correlated)
+        cch_clipped, bin_ids_clipped = sc.cross_correlation_histogram(
+            self.binned_st1, self.binned_st2, mode='valid', window=None,
+            binary=True)
+        cch_unclipped, bin_ids_unclipped = sc.cross_correlation_histogram(
+            self.binned_st1, self.binned_st2, mode='valid', window=None,
+            binary=False)
+
+        # Check normal correlation Note: Use numpy correlate to verify result.
+        # Note: numpy conventions for input array 1 and input array 2 are
+        # swapped compared to Elephant!
+        mat1 = self.binned_st1.to_array()[0]
+        mat2 = self.binned_st2.to_array()[0]
+        target_numpy = np.correlate(mat2, mat1, mode='valid')
+        assert_array_equal(
+            target_numpy, np.squeeze(cch_unclipped.magnitude))
+
+        # Check correlation using binary spike trains
+        mat1 = np.array(self.binned_st1.to_bool_array()[0], dtype=int)
+        mat2 = np.array(self.binned_st2.to_bool_array()[0], dtype=int)
+        target_numpy = np.correlate(mat2, mat1, mode='valid')
+        assert_array_equal(
+            target_numpy, np.squeeze(cch_clipped.magnitude))
+
+        # Check for wrong mode parameter setting
+        self.assertRaises(
+            ValueError, sc.cross_correlation_histogram, self.binned_st1,
+            self.binned_st2, mode='dsaij')
 
         # Check the time axis and bin IDs of the resulting AnalogSignalArray
         assert_array_almost_equal(
@@ -227,6 +261,31 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         _, bin_ids = sc.cch(
             self.binned_st1, self.binned_st2, normalize=True, window=[-20, 30])
         assert_array_equal(bin_ids, np.arange(-20, 31, 1))
+
+        # Cehck for wrong assignments to the window parameter
+        self.assertRaises(
+            ValueError, sc.cross_correlation_histogram, self.binned_st1,
+            self.binned_st2, window=[-60, 50])
+
+        self.assertRaises(
+            ValueError, sc.cross_correlation_histogram, self.binned_st1,
+            self.binned_st2, window=[-50, 60])
+
+        self.assertRaises(
+            ValueError, sc.cross_correlation_histogram, self.binned_st1,
+            self.binned_st2, window=[-25.5*pq.ms, 25*pq.ms])
+
+        self.assertRaises(
+            ValueError, sc.cross_correlation_histogram, self.binned_st1,
+            self.binned_st2, window=[-25*pq.ms, 25.5*pq.ms])
+
+        self.assertRaises(
+            ValueError, sc.cross_correlation_histogram, self.binned_st1,
+            self.binned_st2, window=[-60*pq.ms, 50*pq.ms])
+
+        self.assertRaises(
+            ValueError, sc.cross_correlation_histogram, self.binned_st1,
+            self.binned_st2, window=[-50*pq.ms, 60*pq.ms])
 
     def test_border_correction(self):
         '''Test if the border correction for bins at the edges is correctly

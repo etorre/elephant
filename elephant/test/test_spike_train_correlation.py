@@ -160,6 +160,28 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
             self.binned_st1, self.binned_st2, mode='full', window=None,
             binary=False)
 
+        cch_clipped_mem, bin_ids_clipped_mem = sc.cross_correlation_histogram(
+            self.binned_st1, self.binned_st2, mode='full', window=None,
+            binary=True, method='memory')
+        cch_unclipped_mem, bin_ids_unclipped_mem = sc.cross_correlation_histogram(
+            self.binned_st1, self.binned_st2, mode='full', window=None,
+            binary=False, method='memory')
+        # Check consistency two methods
+        assert_array_equal(
+            np.squeeze(cch_clipped.magnitude), np.squeeze(
+                cch_clipped_mem.magnitude))
+        assert_array_equal(
+            np.squeeze(cch_clipped.times), np.squeeze(
+                cch_clipped_mem.times))
+        assert_array_equal(
+            np.squeeze(cch_unclipped.magnitude), np.squeeze(
+                cch_unclipped_mem.magnitude))
+        assert_array_equal(
+            np.squeeze(cch_unclipped.times), np.squeeze(
+                cch_unclipped_mem.times))
+        assert_array_almost_equal(bin_ids_clipped, bin_ids_clipped_mem)
+        assert_array_almost_equal(bin_ids_unclipped, bin_ids_unclipped_mem)
+
         # Check normal correlation Note: Use numpy correlate to verify result.
         # Note: numpy conventions for input array 1 and input array 2 are
         # swapped compared to Elephant!
@@ -175,6 +197,14 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         target_numpy = np.correlate(mat2, mat1, mode='full')
         assert_array_equal(
             target_numpy, np.squeeze(cch_clipped.magnitude))
+
+        # Check the time axis and bin IDs of the resulting AnalogSignalArray
+        assert_array_almost_equal(
+            (bin_ids_clipped - 0.5) * self.binned_st1.binsize,
+            cch_unclipped.times)
+        assert_array_almost_equal(
+            (bin_ids_clipped - 0.5) * self.binned_st1.binsize,
+            cch_clipped.times)
 
         # Calculate CCH using Elephant (normal and binary version) with
         # mode equal to 'valid' (only completely overlapping intervals of the
@@ -185,6 +215,29 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         cch_unclipped, bin_ids_unclipped = sc.cross_correlation_histogram(
             self.binned_st1, self.binned_st2, mode='valid', window=None,
             binary=False)
+        cch_clipped_mem, bin_ids_clipped_mem = sc.cross_correlation_histogram(
+            self.binned_st1, self.binned_st2, mode='valid', window=None,
+            binary=True, method='memory')
+        cch_unclipped_mem, bin_ids_unclipped_mem = sc.cross_correlation_histogram(
+            self.binned_st1, self.binned_st2, mode='valid', window=None,
+            binary=False, method='memory')
+
+        # Check consistency two methods
+        assert_array_equal(
+            np.squeeze(cch_clipped.magnitude), np.squeeze(
+                cch_clipped_mem.magnitude))
+        assert_array_equal(
+            np.squeeze(cch_clipped.times), np.squeeze(
+                cch_clipped_mem.times))
+        assert_array_equal(
+            np.squeeze(cch_unclipped.magnitude), np.squeeze(
+                cch_unclipped_mem.magnitude))
+        assert_array_equal(
+            np.squeeze(cch_unclipped.times), np.squeeze(
+                cch_unclipped_mem.times))
+        assert_array_almost_equal(bin_ids_clipped, bin_ids_clipped_mem)
+        assert_array_almost_equal(bin_ids_unclipped, bin_ids_unclipped_mem)
+
 
         # Check normal correlation Note: Use numpy correlate to verify result.
         # Note: numpy conventions for input array 1 and input array 2 are
@@ -202,11 +255,6 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         assert_array_equal(
             target_numpy, np.squeeze(cch_clipped.magnitude))
 
-        # Check for wrong mode parameter setting
-        self.assertRaises(
-            ValueError, sc.cross_correlation_histogram, self.binned_st1,
-            self.binned_st2, mode='dsaij')
-
         # Check the time axis and bin IDs of the resulting AnalogSignalArray
         assert_array_almost_equal(
             (bin_ids_clipped - 0.5) * self.binned_st1.binsize,
@@ -214,6 +262,11 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         assert_array_almost_equal(
             (bin_ids_clipped - 0.5) * self.binned_st1.binsize,
             cch_clipped.times)
+
+        # Check for wrong mode parameter setting
+        self.assertRaises(
+            KeyError, sc.cross_correlation_histogram, self.binned_st1,
+            self.binned_st2, mode='dsaij')
 
     def test_normalize_option(self):
         '''
@@ -237,21 +290,24 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         '''Check that an exception is thrown if the two spike trains are not
         binned with the same bin size.'''
         self.assertRaises(
-            ValueError,
+            AssertionError,
             sc.cross_correlation_histogram, self.binned_st1, self.binned_st3)
 
     def test_window(self):
         '''Test if the window parameter is correctly interpreted.'''
-        _, bin_ids = sc.cch(
+        cch_win, bin_ids = sc.cch(
             self.binned_st1, self.binned_st2, window=[-30, 30])
         assert_array_equal(bin_ids, np.arange(-30, 31, 1))
-        _, bin_ids = sc.cch(
+        assert_array_almost_equal(
+            (bin_ids - 0.5) * self.binned_st1.binsize, cch_win.times)
+        cch_win, bin_ids = sc.cch(
             self.binned_st1, self.binned_st2, window=[-25*pq.ms, 25*pq.ms])
         assert_array_equal(bin_ids, np.arange(-25, 26, 1))
+        assert_array_almost_equal(
+            (bin_ids - 0.5) * self.binned_st1.binsize, cch_win.times)
         _, bin_ids = sc.cch(
-            self.binned_st1, self.binned_st2, normalize=True, window=[-30, 30])
-        assert_array_equal(bin_ids, np.arange(-30, 31, 1))
-
+            self.binned_st1, self.binned_st2, normalize=True, window=[20, 30])
+        assert_array_equal(bin_ids, np.arange(20, 31, 1))
         _, bin_ids = sc.cch(
             self.binned_st1, self.binned_st2, normalize=True, window=[-20, 30])
         assert_array_equal(bin_ids, np.arange(-20, 31, 1))

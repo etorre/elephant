@@ -11,6 +11,7 @@ from __future__ import division
 import numpy as np
 import quantities as pq
 import neo
+import warnings
 
 
 def corrcoef(binned_sts, binary=False):
@@ -153,7 +154,7 @@ def corrcoef(binned_sts, binary=False):
 def cross_correlation_histogram(
         st1, st2, mode='full', window=None, normalize=False,
         border_correction=False, binary=False, kernel=None,
-        chance_corrected=False, method="memory", **kwargs):
+        chance_corrected=False, method='memory', **kwargs):
     """
     Computes the cross-correlation histogram (CCH) between two binned spike
     trains st1 and st2.
@@ -171,14 +172,18 @@ def cross_correlation_histogram(
         The cross-correlation product is only given for points where the
         signals overlap completely.
         Values outside the signal boundary have no effect.
-    window : int or None (optional)
-        histogram half-length. If specified, the cross-correlation histogram
-        has a number of bins equal to 2*window+1 (up to the maximum length).
-        If not specified, the full crosscorrelogram is returned
+        Default: 'full'
+    window : list (optional)
+        If None the CCH edges are set according to the mode parameter,
+        otherwise the mode parameter is ignored and the spiketrains will be
+        correlated (window[0]=minimum, window[1]=maximum  lag). The  entries
+        of window can be integer (number of bins) or quantities (time units of
+        the lag), in the second case they have to be a multiple of the binsize
         Default: None
     normalize : bool (optional)
         whether to normalize the central value (corresponding to time lag
-        0 s) to 1; the other values are rescaled accordingly.
+        0 s) to 1; the other values are rescaled accordingly. If the window
+        does not include the time lag 0, the norm parameter is ignored.
         Default: False
     border_correction : bool (optional)
         whether to correct for the border effect. If True, the value of the
@@ -207,7 +212,7 @@ def cross_correlation_histogram(
         the CCH is not smoothed.
         Default: None
     method : string (optional)
-        Defines the algorithm to use. "speed" uses numpy.convolve to calculate
+        Defines the algorithm to use. "speed" uses numpy.correlate to calculate
         the correlation, whereas "memory" uses an own implementation to
         calculate the correlation, which is memory efficient but slower.
 
@@ -251,19 +256,20 @@ def cross_correlation_histogram(
         Plot the cross-correlation histogram between two Poisson spike trains
         >>> import elephant
         >>> import matplotlib.pyplot as plt
+        >>> import quantities as pq
 
         >>> binned_st1 = elephant.conversion.BinnedSpikeTrain(
                 elephant.spike_train_generation.homogeneous_poisson_process(
-                    10. * pq.Hz, t_start=0 * pq.ms, t_stop=2000 * pq.s),
-                binsize=1. * pq.ms)
+                    10. * pq.Hz, t_start=0 * pq.ms, t_stop=5000 * pq.ms),
+                binsize=5. * pq.ms)
         >>> binned_st2 = elephant.conversion.BinnedSpikeTrain(
                 elephant.spike_train_generation.homogeneous_poisson_process(
-                    10. * pq.Hz, t_start=0 * pq.ms, t_stop=2000 * pq.s),
-                binsize=1. * pq.ms)
+                    10. * pq.Hz, t_start=0 * pq.ms, t_stop=5000 * pq.ms),
+                binsize=5. * pq.ms)
 
         >>> cc_hist = elephant.spike_train_correlation.cross_correlation_histogram(
-                binned_st1, binned_st2, window=20,
-                normalize=True, border_correction=False,
+                binned_st1, binned_st2, window=[-30,30],
+                normalize=False, border_correction=False,
                 binary=False, kernel=None)
 
         >>> plt.bar(
@@ -302,9 +308,12 @@ def cross_correlation_histogram(
     """
 
     def _cch_memory(st_1, st_2, win, mode, norm, border_corr, binary, kern):
-        if st_1.binsize != st_2.binsize:
-            raise ValueError(
-                "Input spike trains must be binned with the same bin size")
+
+        # Check that the spike trains are binned with the saem temporal
+        # resolution
+        assert st1.matrix_rows == 1, "spike train must be one dimensional"
+        assert st2.matrix_rows == 1, "spike train must be one dimensional"
+        assert st1.binsize == st2.binsize, "bin sizes must be equal"
 
         # Retrieve unclipped matrix
         st1_spmat = st_1.to_sparse_array()
@@ -312,7 +321,7 @@ def cross_correlation_histogram(
         binsize = st_1.binsize
         max_num_bins = max(st_1.num_bins, st_2.num_bins)
 
-        # Set the time window in which the piketrains is compute the cch
+        # Set the time window in which is computed the cch
         if win is not None:
             # Window parameter given in number of bins (integer)
             if isinstance(win[0], int) and isinstance(win[1], int):
@@ -352,7 +361,7 @@ def cross_correlation_histogram(
                 l = min(st_2.num_bins - st_1.num_bins, 0)
             # Check the mode parameter
             else:
-                raise ValueError(
+                raise KeyError(
                     "The possible entries for mode parameter are" +
                     "'full' and 'valid'")
 
@@ -411,8 +420,11 @@ def cross_correlation_histogram(
 
         # Rescale the histogram so that the central bin has height 1,
         # if requested
-        if norm:
-            counts = np.array(counts, float) / float(counts[np.abs(l)])
+        if norm and l <= 0 and r >= 0:
+            if counts[np.abs(l)] != 0:
+                counts = counts / counts[np.abs(l)]
+            else:
+                warnings.warn('CCH not normalized because no value for 0 lag')
 
         # Transform the array count into an AnalogSignalArray
         cch_result = neo.AnalogSignalArray(
@@ -424,60 +436,126 @@ def cross_correlation_histogram(
         # central one
         return cch_result, bin_ids
 
-    def _cch_fast(x, y, win, binsize, chance_corr, kern):
+    def _cch_fast(st_1, st_2, win, mode, norm, border_corr, binary, kern):
 
-        l, r = int(win[0] / binsize), int(win[1] / binsize)
-        # n = len(x)
-        # trim trains to have appropriate length of xcorr array
-        if l < 0:
-            y = y[-l:]
+        # Check that the spike trains are binned with the same temporal
+        # resolution
+        assert st1.matrix_rows == 1, "spike train must be one dimensional"
+        assert st2.matrix_rows == 1, "spike train must be one dimensional"
+        assert st1.binsize == st2.binsize, "bin sizes must be equal"
+
+        # Retrieve the array of the binne spik train
+        st1_arr = st1.to_array()[0, :]
+        st2_arr = st2.to_array()[0, :]
+        binsize = st1.binsize
+
+        # Convert the to binary version
+        if binary:
+            st1_arr = np.array(st1_arr > 0, dtype=int)
+            st2_arr = np.array(st2_arr > 0, dtype=int)
+        max_num_bins = max(len(st1_arr), len(st2_arr))
+
+        # Cross correlate the spiketrains
+
+        # Case explicit temporal window
+        if win is not None:
+            # Window parameter given in number of bins (integer)
+            if isinstance(win[0], int) and isinstance(win[1], int):
+                # Check the window parameter values
+                if win[0] >= win[1] or win[0] <= -max_num_bins \
+                        or win[1] >= max_num_bins:
+                    raise ValueError(
+                        "The window exceed the length of the spike trains")
+                # Assign left and right edges of the cch
+                l, r = win[0], win[1]
+            # Window parameter given in time units
+            else:
+                # Check the window parameter values
+                if win[0].rescale(binsize.units).magnitude % \
+                    binsize.magnitude != 0 or win[1].rescale(
+                        binsize.units).magnitude % binsize.magnitude != 0:
+                    raise ValueError(
+                        "The window has to be a multiple of the binsize")
+                if win[0] >= win[1] or win[0] <= -max_num_bins * binsize \
+                        or win[1] >= max_num_bins * binsize:
+                    raise ValueError("The window exceed the length of the"
+                                     " spike trains")
+                # Assign left and right edges of the cch
+                l, r = int(win[0].rescale(binsize.units) / binsize), int(
+                    win[1].rescale(binsize.units) / binsize)
+
+            # Cross correlate the spike trains
+            counts = corr = np.correlate(st2_arr, st1_arr, mode='full')
+            counts = corr[len(st1_arr)+l+1:len(st1_arr)+1+r+1]
+
+        # Case generic
         else:
-            x = x[l:]
-        y = y[:-r]
-        mx, my = x.mean(), y.mean()
-        # TODO: possibly use fftconvolve for faster calculation
-        # TODO: exchange convolve by correlate -- good?
-        corr = np.convolve(x, y[::-1], 'valid')
-        # corr = np.correlate(x, y, 'valid')
+            # Cross correlate the spike trains
+            counts = np.correlate(st2_arr, st1_arr, mode=mode)
+            # Assign the edges of the cch for the different mode parameters
+            if mode == 'full':
+                # Assign left and right edges of the cch
+                r = st_2.num_bins - 1
+                l = - st_1.num_bins + 1
+            # cch compute only for the entries that completely overlap
+            elif mode == 'valid':
+                # Assign left and right edges of the cch
+                r = max(st_2.num_bins - st_1.num_bins, 0)
+                l = min(st_2.num_bins - st_1.num_bins, 0)
+        bin_ids = np.r_[l:r + 1]
 
-        # correct for chance coincidences
-        # mx = np.convolve(x, np.ones(len(y)), 'valid') / len(y)
-        corr = corr / np.sum(y)
+        # Correct the values taking into account lacking contributes
+        # at the edges
+        if border_corr is True:
+            correction = float(max_num_bins + 1) / np.array(
+                max_num_bins + 1 - abs(
+                    np.arange(l, r + 1)), float)
+            counts = counts * correction
 
-        if chance_corr:
-            corr = corr - mx
-
-        lags = np.r_[l:r + 1]
-
-        # Kernel smoothing
-        # TODO make function?
+        # Define the kern for smoothing as an ndarray
         if hasattr(kern, '__iter__'):
-            if len(kern) > lags:
+            if len(kern) > np.abs(l) + np.abs(r) + 1:
                 raise ValueError(
                     'The length of the kernel cannot be larger than the '
-                    'length %d of the resulting CCH.' % lags)
+                    'length %d of the resulting CCH.' % (
+                        np.abs(l) + np.abs(r) + 1))
             kern = np.array(kern, dtype=float)
-            kern = 1. * kern / np.sum(kern)
+            kern = 1. * kern / sum(kern)
+        # Check kern parameter
         elif kern is not None:
             raise ValueError('Invalid smoothing kernel.')
 
         # Smooth the cross-correlation histogram with the kern
         if kern is not None:
-            corr = np.convolve(corr, kern, mode='same')
+            counts = np.convolve(counts, kern, mode='same')
 
-        return lags * binsize, corr
+        # Rescale the histogram so that the central bin has height 1,
+        # if requested
+        if norm and l <= 0 and r >= 0:
+            if counts[np.abs(l)] != 0:
+                counts = counts / counts[np.abs(l)]
+            else:
+                warnings.warn('CCH not normalized because no value for 0 lag')
+
+        # Transform the array count into an AnalogSignalArray
+        cch_result = neo.AnalogSignalArray(
+            signal=counts.reshape(counts.size, 1),
+            units=pq.dimensionless,
+            t_start=(bin_ids[0] - 0.5) * st_1.binsize,
+            sampling_period=st_1.binsize)
+        # Return only the hist_bins bins and counts before and after the
+        # central one
+        return cch_result, bin_ids
 
     if method is "memory":
         cch_result, bin_ids = _cch_memory(
-            st1, st2, window, mode, normalize, border_correction, binary, kernel)
+            st1, st2, window, mode, normalize, border_correction, binary,
+            kernel)
     elif method is "speed":
-        st1_arr = st1.to_array()[0, :]
-        st2_arr = st2.to_array()[0, :]
-
-        binsize = st1.binsize
 
         cch_result, bin_ids = _cch_fast(
-            st1_arr, st2_arr, window, binsize, chance_corrected, kernel)
+            st1, st2, window, mode, normalize, border_correction, binary,
+            kernel)
 
     return cch_result, bin_ids
 

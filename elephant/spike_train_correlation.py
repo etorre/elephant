@@ -161,7 +161,7 @@ def cross_correlation_histogram(
 
     Parameters
     ----------
-    st1,st2 : BinnedSpikeTrain
+    st1, st2 : BinnedSpikeTrain
         Binned spike trains to cross-correlate.
     mode: string (optional)
         ‘full’: This returns the crosscorrelation at each point of overlap,
@@ -215,11 +215,6 @@ def cross_correlation_histogram(
         Defines the algorithm to use. "speed" uses numpy.correlate to calculate
         the correlation, whereas "memory" uses an own implementation to
         calculate the correlation, which is memory efficient but slower.
-
-    kwargs :
-    border_normalisation: bool
-        For memory mode
-        Normalisation for of border bins by cutting bins at the border
 
         TODO:
         * Normalize before or after smoothing -- is this good?
@@ -288,8 +283,7 @@ def cross_correlation_histogram(
     Notes
     -----
     If method is set to `speed`:
-    The algorithm is implemented as a convolution between binned spike train.
-    We trim the spike trains according to the selected correlogram window.
+    The algorithm is implemented as a convolution between binned spike trains.
     This allows us to avoid edge effects due to undersampling of long
     inter-spike intervals, but also removes some data from calculation, which
     may be considerable amount for long windows. This method also improves
@@ -298,22 +292,21 @@ def cross_correlation_histogram(
 
     *Normalisation*
 
-    By default normalisation is set such that for perfectly synchronised
+    If normalisation is set then for perfectly synchronised
     spike train (same spike train passed in binned_st1 and binned_st2) the
     maximum correlogram (at lag 0) is 1.
-
-    If the `chance_coincidences == True` than the expected coincidence rate is
-    subracted, such that the  expected correlogram for non-correlated spike
-    train is 0.
     """
 
     def _cch_memory(st_1, st_2, win, mode, norm, border_corr, binary, kern):
 
         # Check that the spike trains are binned with the saem temporal
         # resolution
-        assert st1.matrix_rows == 1, "spike train must be one dimensional"
-        assert st2.matrix_rows == 1, "spike train must be one dimensional"
-        assert st1.binsize == st2.binsize, "bin sizes must be equal"
+        if not st1.matrix_rows == 1:
+            raise AssertionError("Spike train must be one dimensional")
+        if not st2.matrix_rows == 1:
+            raise AssertionError("Spike train must be one dimensional")
+        if not st1.binsize == st2.binsize:
+            raise AssertionError("Bin sizes must be equal")
 
         # Retrieve unclipped matrix
         st1_spmat = st_1.to_sparse_array()
@@ -329,7 +322,7 @@ def cross_correlation_histogram(
                 if win[0] >= win[1] or win[0] <= -max_num_bins \
                         or win[1] >= max_num_bins:
                     raise ValueError(
-                        "The window exceed the length of the spike trains")
+                        "The window exceeds the length of the spike trains")
                 # Assign left and right edges of the cch
                 l, r = win[0], win[1]
             # Window parameter given in time units
@@ -342,7 +335,7 @@ def cross_correlation_histogram(
                         "The window has to be a multiple of the binsize")
                 if win[0] >= win[1] or win[0] <= -max_num_bins * binsize \
                         or win[1] >= max_num_bins * binsize:
-                    raise ValueError("The window exceed the length of the"
+                    raise ValueError("The window exceeds the length of the"
                                      " spike trains")
                 # Assign left and right edges of the cch
                 l, r = int(win[0].rescale(binsize.units) / binsize), int(
@@ -420,7 +413,7 @@ def cross_correlation_histogram(
 
         # Rescale the histogram so that the central bin has height 1,
         # if requested
-        if norm and l <= 0 and r >= 0:
+        if norm and l <= 0 <= r:
             if counts[np.abs(l)] != 0:
                 counts = counts / counts[np.abs(l)]
             else:
@@ -440,9 +433,12 @@ def cross_correlation_histogram(
 
         # Check that the spike trains are binned with the same temporal
         # resolution
-        assert st1.matrix_rows == 1, "spike train must be one dimensional"
-        assert st2.matrix_rows == 1, "spike train must be one dimensional"
-        assert st1.binsize == st2.binsize, "bin sizes must be equal"
+        if not st1.matrix_rows == 1:
+            raise AssertionError("Spike train must be one dimensional")
+        if not st2.matrix_rows == 1:
+            raise AssertionError("Spike train must be one dimensional")
+        if not st1.binsize == st2.binsize:
+            raise AssertionError("Bin sizes must be equal")
 
         # Retrieve the array of the binne spik train
         st1_arr = st1.to_array()[0, :]
@@ -485,7 +481,7 @@ def cross_correlation_histogram(
                     win[1].rescale(binsize.units) / binsize)
 
             # Cross correlate the spike trains
-            counts = corr = np.correlate(st2_arr, st1_arr, mode='full')
+            corr = np.correlate(st2_arr, st1_arr, mode='full')
             counts = corr[len(st1_arr)+l+1:len(st1_arr)+1+r+1]
 
         # Case generic
@@ -531,7 +527,7 @@ def cross_correlation_histogram(
 
         # Rescale the histogram so that the central bin has height 1,
         # if requested
-        if norm and l <= 0 and r >= 0:
+        if norm and l <= 0 <= r:
             if counts[np.abs(l)] != 0:
                 counts = counts / counts[np.abs(l)]
             else:
@@ -561,123 +557,3 @@ def cross_correlation_histogram(
 
 # Alias for common abbreviation
 cch = cross_correlation_histogram
-
-
-def btel_crosscorrelogram(binned_st1, binned_st2, win, chance_corrected=False):
-    '''
-    Calculate cross-correlogram for a pair of binned spike train. To
-    caluculate auto-correlogram use the same spike train for both.
-
-    Parameters
-    ----------
-    binned_st1 : elephant.conversion.BinnedSpikeTrain
-        A binned spike train containing the 'post-synaptic' spikes.
-    binned_st2 : elephant.conversion.BinnedSpikeTrain
-        A binned spike train containing the reference ('pre-synaptic') spikes.
-    win : sequence of length 2
-        Window in which the correlogram will be correlated (minimum, maximum
-        lag)
-    chance_corrected : bool, default True
-        Whether to correct for chance coincidences.
-
-    Returns
-    -------
-    lags : ndarray
-        Array of time lags. Useful for plotting
-    xcorr : ndarray
-        Array of cross-correlogram values; one per time lag.
-
-    Examples
-    --------
-
-    Generate Poisson spike train
-
-    >>> from quantities import Hz, ms
-    >>> from elephant.spike_train_generation import homogeneous_poisson_process
-    >>> st1 = homogeneous_poisson_process(rate=10.0*Hz, t_stop=10000*ms)
-
-    Generate a second spike train by adding some jitter.
-
-    >>> import numpy as np
-    >>> st2 = st1.copy()
-    >>> st2.times[:] += np.random.randn(len(st1)) * 5 * ms
-
-    Bin spike trains
-    >>> from elephant.conversion import BinnedSpikeTrain
-    >>> st1b = BinnedSpikeTrain(st1, binsize = 1 * ms)
-    >>> st2b = BinnedSpikeTrain(st2, binsize = 1 * ms)
-
-    Calculate auto- and cross-correlogram
-
-    >>> lags, acorr = crosscorrelogram(st1b, st1b, [-100*ms, 100*ms])
-    >>> _, xcorr = crosscorrelogram(st1b, st2b, [-100*ms, 100*ms])
-
-    Plot them
-
-    >>> import matplotlib.pyplot as plt
-    >>> plt.plot(lags, xcorr)
-    >>> plt.plot(lags, acorr)
-
-
-    Notes
-    -----
-
-    *Algorithm*
-
-    The algorithm is implemented as a convolution between binned spike train.
-    We trim the spike trains according to the selected correlogram window.
-    This allows us to avoid edge effects due to undersampling of long
-    inter-spike intervals, but also removes some data from calculation, which
-    may be considerable amount for long windows. This method also improves
-    the performance since we do not have to calculate correlogram for all
-    possible lags, but only the selected ones.
-
-    *Normalisation*
-
-    By default normalisation is set such that for perfectly synchronised
-    spike train (same spike train passed in binned_st1 and binned_st2) the
-    maximum correlogram (at lag 0) is 1.
-
-    If the chance_coincidences == True than the expected coincidence rate is
-    subracted, such that the  expected correlogram for non-correlated spike
-    train is 0.  '''
-
-    assert binned_st1.matrix_rows == 1, "spike train must be one dimensional"
-    assert binned_st2.matrix_rows == 1, "spike train must be one dimensional"
-    assert binned_st1.binsize == binned_st2.binsize, "bin sizes must be equal"
-
-    st1_arr = binned_st1.to_array()[0, :]
-    st2_arr = binned_st2.to_array()[0, :]
-
-    binsize = binned_st1.binsize
-
-    print(st1_arr)
-    print(st2_arr)
-
-    def _xcorr(x, y, win, dt):
-
-        l, r = int(win[0] / dt), int(win[1] / dt)
-        n = len(x)
-        # trim trains to have appropriate length of xcorr array
-        if l < 0:
-            y = y[-l:]
-        else:
-            x = x[l:]
-        y = y[:-r]
-        mx, my = x.mean(), y.mean()
-        # TODO: possibly use fftconvolve for faster calculation
-        # TDOO: exchanged convolve by correlate -- good?
-        # corr = np.convolve(x, y[::-1], 'valid')
-        corr = np.correlate(x, y, 'valid')
-
-        # correct for chance coincidences
-        # mx = np.convolve(x, np.ones(len(y)), 'valid') / len(y)
-        corr = corr / np.sum(y)
-
-        if chance_corrected:
-            corr = corr - mx
-
-        lags = np.r_[l:r + 1]
-        return lags * dt, corr
-
-    return _xcorr(st1_arr, st2_arr, win, binsize)

@@ -295,8 +295,6 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         self.assertEqual(target_time_mem, -0.5*self.binned_st1.binsize)
         self.assertEqual(target_value_mem, 1)
 
-
-
     def test_binsize(self):
         '''Check that an exception is thrown if the two spike trains are not
         binned with the same bin size.'''
@@ -450,6 +448,11 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
             ValueError, sc.cch, self.binned_st1, self.binned_st2, kernel='BOX',
             method='memory')
 
+    def test_exist_alias(self):
+        '''
+        Test if alias cch still exists.
+        '''
+        self.assertEqual(sc.cross_correlation_histogram, sc.cch)
 
 if __name__ == '__main__':
     unittest.main()

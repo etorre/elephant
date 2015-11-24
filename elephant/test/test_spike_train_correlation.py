@@ -367,27 +367,5 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         '''
         self.assertEqual(sc.cross_correlation_histogram, sc.cch)
 
-#    def test_btel_cross_correlation_histogram_consistency(self):
-#        '''
-#        Test consistency of btel's implementation and INM-6's implementation of
-#        the CCH.
-#        '''
-#        # Calculate CCH using Elephant (normal and binary version)
-#        bin_ids_btel, cch_btel = sc.btel_crosscorrelogram(
-#            self.binned_st1, self.binned_st2,
-#            win=[-10 * pq.ms, 10 * pq.ms],
-#            chance_corrected=False)
-#        cch_inm, bin_ids_inm = sc.cross_correlation_histogram(
-#            self.binned_st1, self.binned_st2,
-#            window=[-5, 5],
-#            border_correction=False, normalize=False, binary=False)
-#
-#        print(len(cch_btel))
-#        print(len(cch_inm))
-#        print(bin_ids_btel)
-#        print(bin_ids_inm)
-#        assert_array_equal(
-#            np.squeeze(cch_btel), np.squeeze(cch_inm.magnitude))
-
 if __name__ == '__main__':
     unittest.main()

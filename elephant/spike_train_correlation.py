@@ -154,7 +154,7 @@ def corrcoef(binned_sts, binary=False):
 def cross_correlation_histogram(
         st1, st2, mode='full', window=None, normalize=False,
         border_correction=False, binary=False, kernel=None,
-        chance_corrected=False, method='memory', **kwargs):
+        chance_corrected=False, method='speed', **kwargs):
     """
     Computes the cross-correlation histogram (CCH) between two binned spike
     trains st1 and st2.

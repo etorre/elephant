@@ -238,7 +238,6 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         assert_array_almost_equal(bin_ids_clipped, bin_ids_clipped_mem)
         assert_array_almost_equal(bin_ids_unclipped, bin_ids_unclipped_mem)
 
-
         # Check normal correlation Note: Use numpy correlate to verify result.
         # Note: numpy conventions for input array 1 and input array 2 are
         # swapped compared to Elephant!
@@ -277,14 +276,26 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         cch_norm, bins = sc.cross_correlation_histogram(
             self.binned_st1, self.binned_st2, window=None, binary=False,
             normalize=True)
+        cch_norm_mem, bins_mem = sc.cross_correlation_histogram(
+            self.binned_st1, self.binned_st2, window=None, binary=False,
+            normalize=True, method='memory')
 
         # Check that central bin is 1
         center_bin = np.where(bins == 0)
         target_time = cch_norm.times.magnitude[center_bin]
         target_value = cch_norm.magnitude[center_bin]
 
+        center_bin_mem = np.where(bins_mem == 0)
+        target_time_mem = cch_norm_mem.times.magnitude[center_bin_mem]
+        target_value_mem = cch_norm.magnitude[center_bin_mem]
+
         self.assertEqual(target_time, -0.5*self.binned_st1.binsize)
         self.assertEqual(target_value, 1)
+
+        self.assertEqual(target_time_mem, -0.5*self.binned_st1.binsize)
+        self.assertEqual(target_value_mem, 1)
+
+
 
     def test_binsize(self):
         '''Check that an exception is thrown if the two spike trains are not
@@ -293,49 +304,101 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
             AssertionError,
             sc.cross_correlation_histogram, self.binned_st1, self.binned_st3)
 
+        self.assertRaises(
+            AssertionError,
+            sc.cross_correlation_histogram, self.binned_st1, self.binned_st3,
+            method='memory')
+
     def test_window(self):
         '''Test if the window parameter is correctly interpreted.'''
         cch_win, bin_ids = sc.cch(
             self.binned_st1, self.binned_st2, window=[-30, 30])
+        cch_win_mem, bin_ids_mem = sc.cch(
+            self.binned_st1, self.binned_st2, window=[-30, 30])
+
         assert_array_equal(bin_ids, np.arange(-30, 31, 1))
         assert_array_almost_equal(
             (bin_ids - 0.5) * self.binned_st1.binsize, cch_win.times)
+
+        assert_array_equal(bin_ids_mem, np.arange(-30, 31, 1))
+        assert_array_almost_equal(
+            (bin_ids_mem - 0.5) * self.binned_st1.binsize, cch_win.times)
+
         cch_win, bin_ids = sc.cch(
             self.binned_st1, self.binned_st2, window=[-25*pq.ms, 25*pq.ms])
+        cch_win_mem, bin_ids_mem = sc.cch(
+            self.binned_st1, self.binned_st2, window=[-25*pq.ms, 25*pq.ms],
+            method='memory')
+
         assert_array_equal(bin_ids, np.arange(-25, 26, 1))
         assert_array_almost_equal(
             (bin_ids - 0.5) * self.binned_st1.binsize, cch_win.times)
+
+        assert_array_equal(bin_ids_mem, np.arange(-25, 26, 1))
+        assert_array_almost_equal(
+            (bin_ids_mem - 0.5) * self.binned_st1.binsize, cch_win.times)
+
         _, bin_ids = sc.cch(
             self.binned_st1, self.binned_st2, normalize=True, window=[20, 30])
+        _, bin_ids_mem = sc.cch(
+            self.binned_st1, self.binned_st2, normalize=True, window=[20, 30],
+            method='memory')
+
         assert_array_equal(bin_ids, np.arange(20, 31, 1))
+        assert_array_equal(bin_ids_mem, np.arange(20, 31, 1))
+
         _, bin_ids = sc.cch(
             self.binned_st1, self.binned_st2, normalize=True, window=[-20, 30])
+
+        _, bin_ids_mem = sc.cch(
+            self.binned_st1, self.binned_st2, normalize=True, window=[-20, 30],
+            method='memory')
+
         assert_array_equal(bin_ids, np.arange(-20, 31, 1))
+        assert_array_equal(bin_ids_mem, np.arange(-20, 31, 1))
 
         # Cehck for wrong assignments to the window parameter
         self.assertRaises(
             ValueError, sc.cross_correlation_histogram, self.binned_st1,
             self.binned_st2, window=[-60, 50])
+        self.assertRaises(
+            ValueError, sc.cross_correlation_histogram, self.binned_st1,
+            self.binned_st2, window=[-60, 50], method='memory')
 
         self.assertRaises(
             ValueError, sc.cross_correlation_histogram, self.binned_st1,
             self.binned_st2, window=[-50, 60])
+        self.assertRaises(
+            ValueError, sc.cross_correlation_histogram, self.binned_st1,
+            self.binned_st2, window=[-50, 60], method='memory')
 
         self.assertRaises(
             ValueError, sc.cross_correlation_histogram, self.binned_st1,
             self.binned_st2, window=[-25.5*pq.ms, 25*pq.ms])
+        self.assertRaises(
+            ValueError, sc.cross_correlation_histogram, self.binned_st1,
+            self.binned_st2, window=[-25.5*pq.ms, 25*pq.ms], method='memory')
 
         self.assertRaises(
             ValueError, sc.cross_correlation_histogram, self.binned_st1,
             self.binned_st2, window=[-25*pq.ms, 25.5*pq.ms])
+        self.assertRaises(
+            ValueError, sc.cross_correlation_histogram, self.binned_st1,
+            self.binned_st2, window=[-25*pq.ms, 25.5*pq.ms], method='memory')
 
         self.assertRaises(
             ValueError, sc.cross_correlation_histogram, self.binned_st1,
             self.binned_st2, window=[-60*pq.ms, 50*pq.ms])
+        self.assertRaises(
+            ValueError, sc.cross_correlation_histogram, self.binned_st1,
+            self.binned_st2, window=[-60*pq.ms, 50*pq.ms], method='memory')
 
         self.assertRaises(
             ValueError, sc.cross_correlation_histogram, self.binned_st1,
             self.binned_st2, window=[-50*pq.ms, 60*pq.ms])
+        self.assertRaises(
+            ValueError, sc.cross_correlation_histogram, self.binned_st1,
+            self.binned_st2, window=[-50*pq.ms, 60*pq.ms], method='memory')
 
     def test_border_correction(self):
         '''Test if the border correction for bins at the edges is correctly
@@ -343,51 +406,50 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         cch_corrected, _ = sc.cross_correlation_histogram(
             self.binned_st1, self.binned_st2, window=None, normalize=False,
             border_correction=True, binary=False, kernel=None)
+        cch_corrected_mem, _ = sc.cross_correlation_histogram(
+            self.binned_st1, self.binned_st2, window=None, normalize=False,
+            border_correction=True, binary=False, kernel=None, method='memory')
         cch, _ = sc.cross_correlation_histogram(
             self.binned_st1, self.binned_st2, window=None, normalize=False,
             border_correction=False, binary=False, kernel=None)
+        cch_mem, _ = sc.cross_correlation_histogram(
+            self.binned_st1, self.binned_st2, window=None, normalize=False,
+            border_correction=False, binary=False, kernel=None,
+            method='memory')
+
         self.assertNotEqual(cch.all(), cch_corrected.all())
+        self.assertNotEqual(cch_mem.all(), cch_corrected_mem.all())
 
     def test_kernel(self):
         '''Test if the smoothing kernel is correctly defined, and wheter it is
         applied properly.'''
         smoothed_cch, _ = sc.cross_correlation_histogram(
             self.binned_st1, self.binned_st2, kernel=np.ones(3))
+        smoothed_cch_mem, _ = sc.cross_correlation_histogram(
+            self.binned_st1, self.binned_st2, kernel=np.ones(3),
+            method='memory')
+
         cch, _ = sc.cross_correlation_histogram(
             self.binned_st1, self.binned_st2, kernel=None)
+        cch_mem, _ = sc.cross_correlation_histogram(
+            self.binned_st1, self.binned_st2, kernel=None, method='memory')
+
         self.assertNotEqual(smoothed_cch.all, cch.all)
-        with self.assertRaises(ValueError):
-            sc.cch(self.binned_st1, self.binned_st2, kernel=np.ones(100))
-        with self.assertRaises(ValueError):
-            sc.cch(self.binned_st1, self.binned_st2, kernel='BOX')
+        self.assertNotEqual(smoothed_cch_mem.all, cch_mem.all)
 
-    def test_exist_alias(self):
-        '''
-        Test if alias cch still exists.
-        '''
-        self.assertEqual(sc.cross_correlation_histogram, sc.cch)
+        self.assertRaises(
+            ValueError, sc.cch, self.binned_st1, self.binned_st2,
+            kernel=np.ones(100))
+        self.assertRaises(
+            ValueError, sc.cch, self.binned_st1, self.binned_st2,
+            kernel=np.ones(100), method='memory')
 
-#    def test_btel_cross_correlation_histogram_consistency(self):
-#        '''
-#        Test consistency of btel's implementation and INM-6's implementation of
-#        the CCH.
-#        '''
-#        # Calculate CCH using Elephant (normal and binary version)
-#        bin_ids_btel, cch_btel = sc.btel_crosscorrelogram(
-#            self.binned_st1, self.binned_st2,
-#            win=[-10 * pq.ms, 10 * pq.ms],
-#            chance_corrected=False)
-#        cch_inm, bin_ids_inm = sc.cross_correlation_histogram(
-#            self.binned_st1, self.binned_st2,
-#            window=[-5, 5],
-#            border_correction=False, normalize=False, binary=False)
-#
-#        print(len(cch_btel))
-#        print(len(cch_inm))
-#        print(bin_ids_btel)
-#        print(bin_ids_inm)
-#        assert_array_equal(
-#            np.squeeze(cch_btel), np.squeeze(cch_inm.magnitude))
+        self.assertRaises(
+            ValueError, sc.cch, self.binned_st1, self.binned_st2, kernel='BOX')
+        self.assertRaises(
+            ValueError, sc.cch, self.binned_st1, self.binned_st2, kernel='BOX',
+            method='memory')
+
 
 if __name__ == '__main__':
     unittest.main()

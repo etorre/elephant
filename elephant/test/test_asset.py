@@ -77,8 +77,8 @@ class AssetTestCase(unittest.TestCase):
         np.testing.assert_array_equal(mat_larger_0, mat_larger_0.T)
 
     def test_sse_difference(self):
-        a = {(1,2): set([1,2,3]), (3,4): set([5,6]), (6,7): set([0,1])}
-        b = {(1,2): set([1,2,5]), (5,6): set([0,2]), (6,7): set([0,1])}
+        a = {(1, 2): set([1, 2, 3]), (3, 4): set([5, 6]), (6, 7): set([0, 1])}
+        b = {(1, 2): set([1, 2, 5]), (5, 6): set([0, 2]), (6, 7): set([0, 1])}
         diff_ab_pixelwise = {(3, 4): set([5, 6])}
         diff_ba_pixelwise = {(5, 6): set([0, 2])}
         diff_ab_linkwise = {(1, 2): set([3]), (3, 4): set([5, 6])}
@@ -93,8 +93,8 @@ class AssetTestCase(unittest.TestCase):
             asset.sse_difference(b, a, 'linkwise'), diff_ba_linkwise)
 
     def test_sse_intersection(self):
-        a = {(1,2): set([1,2,3]), (3,4): set([5,6]), (6,7): set([0,1])}
-        b = {(1,2): set([1,2,5]), (5,6): set([0,2]), (6,7): set([0,1])}
+        a = {(1, 2): set([1, 2, 3]), (3, 4): set([5, 6]), (6, 7): set([0, 1])}
+        b = {(1, 2): set([1, 2, 5]), (5, 6): set([0, 2]), (6, 7): set([0, 1])}
         inters_ab_pixelwise = {(1, 2): set([1, 2, 3]), (6, 7): set([0, 1])}
         inters_ba_pixelwise = {(1, 2): set([1, 2, 5]), (6, 7): set([0, 1])}
         inters_ab_linkwise = {(1, 2): set([1, 2]), (6, 7): set([0, 1])}
@@ -109,10 +109,10 @@ class AssetTestCase(unittest.TestCase):
             asset.sse_intersection(b, a, 'linkwise'), inters_ba_linkwise)
 
     def test_sse_relations(self):
-        a = {(1,2): set([1,2,3]), (3,4): set([5,6]), (6,7): set([0,1])}
-        b = {(1,2): set([1,2,5]), (5,6): set([0,2]), (6,7): set([0,1])}
-        c = {(5,6): set([0,2])}
-        d = {(3,4): set([0,1]), (5,6): set([0,1,2])}
+        a = {(1, 2): set([1, 2, 3]), (3, 4): set([5, 6]), (6, 7): set([0, 1])}
+        b = {(1, 2): set([1, 2, 5]), (5, 6): set([0, 2]), (6, 7): set([0, 1])}
+        c = {(5, 6): set([0, 2])}
+        d = {(3, 4): set([0, 1]), (5, 6): set([0, 1, 2])}
         self.assertTrue(asset.sse_isequal({}, {}))
         self.assertTrue(asset.sse_isequal(a, a))
         self.assertFalse(asset.sse_isequal(b, c))
@@ -130,7 +130,7 @@ class AssetTestCase(unittest.TestCase):
 
 
 def suite():
-    suite = unittest.makeSuite(AssetTestCase, 'test')
+    suite = unittest.makeSuite(WormsTestCase, 'test')
     return suite
 
 

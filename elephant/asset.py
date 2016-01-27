@@ -6,16 +6,79 @@ Created on Sat Okt  15 19:41:06 2014
 
 import numpy as np
 import heapq as hp
-import scipy
 import scipy.sparse
+import scipy.spatial
+import scipy.stats
 import quantities as pq
 import neo
 import itertools
-import jelephant.core.rep as rep
-import jelephant.core.conditions as conditions
-import jelephant.core.surrogates as surrogates
-import jelephant.core.stocmod as stocmod
+import elephant.conversion as conv
+# import jelephant.core.conditions as conditions
+import elephant.spike_train_surrogates as spike_train_surrogates
+# import jelephant.core.stocmod as stocmod
 from sklearn.cluster import dbscan as dbscan
+
+# =============================================================================
+# Some Utility Functions to be dealt with in some way or another
+# =============================================================================
+
+
+def _signals_same_tstart(signals):
+    '''
+    Check whether a list of signals (AnalogSignals or SpikeTrains) have same
+    attribute t_start. If so return that value. Otherwise raise a ValueError.
+
+    Parameters:
+    ----------
+    signals : list
+        a list of signals (e.g. AnalogSignals or SpikeTrains) having
+        attribute t_start
+
+    Returns:
+    -------
+    t_start : Quantity
+        The common attribute t_start of the list of signals.
+        If the signals have a different t_start, a ValueError is raised.
+    '''
+
+    t_start = signals[0].t_start
+
+    if len(signals) == 1:
+        return t_start
+    else:
+        for sig in signals[1:]:
+            if sig.t_start != t_start:
+                raise ValueError('signals have different t_start values')
+        return t_start
+
+
+def _signals_same_tstop(signals):
+    '''
+    Check whether a list of signals (AnalogSignals or SpikeTrains) have same
+    attribute t_stop. If so return that value. Otherwise raise a ValueError.
+
+    Parameters:
+    ----------
+    signals : list
+        a list of signals (e.g. AnalogSignals or SpikeTrains) having
+        attribute t_stop
+
+    Returns:
+    -------
+    t_stop : Quantity
+        The common attribute t_stop of the list of signals.
+        If the signals have a different t_stop, a ValueError is raised.
+    '''
+
+    t_stop = signals[0].t_stop
+
+    if len(signals) == 1:
+        return t_stop
+    else:
+        for sig in signals[1:]:
+            if sig.t_stop != t_stop:
+                raise ValueError('signals have different t_stop values')
+        return t_stop
 
 
 def _quantities_almost_equal(x, y):
@@ -43,8 +106,140 @@ def _quantities_almost_equal(x, y):
     return np.all([-eps <= relative_diff, relative_diff <= eps], axis=0)
 
 
-def intersection_matrix(spiketrains, binsize, dt, t_start_x=None,
-    t_start_y=None, norm=None):
+def transactions(spiketrains, binsize, t_start=None, t_stop=None, ids=[]):
+    """
+    Transform parallel spike trains a into list of sublists, called
+    transactions, each corresponding to a time bin and containing the list
+    of spikes in spiketrains falling into that bin.
+
+    To compute each transaction, the spike trains are binned (with adjacent
+    exclusive binning) and clipped (i.e. spikes from the same train falling
+    in the same bin are counted as one event). The list of spike ids within
+    each bin form the corresponding transaction.
+
+    NOTE: the fpgrowth function in the fim module by Christian Borgelt
+    requires int or string type for the SpikeTrain ids.
+
+    Parameters:
+    -----------
+    spiketrains [list]
+        list of neo.core.SpikeTrain objects, or list of pairs
+        (Train_ID, SpikeTrain), where Train_ID can be any hashable object
+    binsize [quantity.Quantity]
+        width of each time bin; time is binned to determine synchrony
+        t_start [quantity.Quantity. Default: None]
+        starting time; only spikes occurring at times t >= t_start are
+        considered; the first transaction contains spike falling into the
+        time segment [t_start, t_start+binsize[.
+        If None, takes the t_start value of the spike trains in spiketrains
+        if the same for all of them, or returns an error.
+    t_stop [quantity.Quantity. Default: None]
+        ending time; only spikes occurring at times t < t_stop are
+        considered.
+        If None, takes the t_stop value of the spike trains in spiketrains
+        if the same for all of them, or returns an error
+
+    Returns:
+    --------
+    trans : list of lists
+        a list of transactions; each transaction corresponds to a time bin
+        and represents the list of spike trains ids having a spike in that
+        time bin.
+
+
+    """
+    # Define the spike trains and their IDs depending on the input arguments
+    if all([hasattr(elem, '__iter__') and len(elem) == 2 and
+            type(elem[1]) == neo.SpikeTrain for elem in spiketrains]):
+        ids = [elem[0] for elem in spiketrains]
+        trains = [elem[1] for elem in spiketrains]
+    elif all([type(st) == neo.SpikeTrain for st in spiketrains]):
+        trains = spiketrains
+        ids = range(len(spiketrains)) if ids == [] else ids
+    else:
+        raise TypeError('spiketrains must be either a list of ' +
+            'SpikeTrains or a list of (id, SpikeTrain) pairs')
+
+    # Take the minimum and maximum t_start and t_stop of all spike trains
+    tstarts = [xx.t_start for xx in trains]
+    tstops = [xx.t_stop for xx in trains]
+    max_tstart, min_tstart = max(tstarts), min(tstarts)
+    max_tstop, min_tstop = max(tstops), min(tstops)
+
+    # Set starting time of binning
+    if t_start == None:
+        start = _signals_same_tstart(trains)
+    elif t_start < max_tstart:
+        raise ValueError('Some SpikeTrains have a larger t_start ' +
+            'than the specified t_start value')
+    else:
+        start = t_start
+
+    # Set stopping time of binning
+    if t_stop is None:
+        stop = _signals_same_tstop(trains)
+    elif t_stop > min_tstop:
+        raise ValueError(
+            'Some SpikeTrains have a smaller t_stop ' +
+            'than the specified t_stop value')
+    else:
+        stop = t_stop
+
+    # Bin the spike trains and take for each of them the ids of filled bins
+    binned = conv.BinnedSpikeTrain(
+        trains, binsize=binsize, t_start=start, t_stop=stop)
+    Nbins = binned.num_bins
+    # TODO: Maybe this is a bug and spike_indicies is not the same as 'filled',
+    # which was the original code from jelephant
+    filled_bins = binned.spike_indices()
+
+    # Compute and return the transaction list
+    return [[train_id for train_id, b in zip(ids, filled_bins)
+        if bin_id in b] for bin_id in xrange(Nbins)]
+
+
+def _analog_signal_step_interp(signal, times):
+    '''
+    Compute the step-wise interpolation of a signal at desired times.
+
+    Given a signal (e.g. an AnalogSignal) AS taking value s0 and s1 at two
+    consecutive time points t0 and t1 (t0 < t1), the value s of the step-wise
+    interpolation at time t: t0 <= t < t1 is given by s=s0, for any time t
+    between AS.t_start and AS.t_stop.
+
+
+    Parameters
+    -----
+    times : Quantity vector(time)
+        The time points for which the interpolation is computed
+
+    signal : neo.core.AnalogSignal
+        The analog signal containing the discretization of the function to
+        interpolate
+
+
+    Output
+    -----
+    Quantity array representing the values of the interpolated signal at the
+    times given by times
+    '''
+    dt = signal.sampling_period
+
+    # Compute the ids of the signal times to the left of each time in times
+    time_ids = np.floor(
+        ((times - signal.t_start) / dt).rescale(pq.dimensionless).magnitude
+    ).astype('i')
+
+    # TODO: return as an IrregularlySampledSignal?
+    return(signal.magnitude[time_ids] * signal.units).rescale(signal.units)
+
+# =============================================================================
+# HERE ASSET STARTS
+# =============================================================================
+
+
+def intersection_matrix(
+        spiketrains, binsize, dt, t_start_x=None, t_start_y=None, norm=None):
     """
     Generates the intersection matrix from a list of spike trains.
 
@@ -97,10 +292,10 @@ def intersection_matrix(spiketrains, binsize, dt, t_start_x=None,
         a matrix of shape (n, n), y_edges has length n+1
     """
     # Setting the start and stop time for the x and y axes:
-    if t_start_x == None:
-        t_start_x = conditions.signals_same_tstart(spiketrains)
-    if t_start_y == None:
-        t_start_y = conditions.signals_same_tstart(spiketrains)
+    if t_start_x is None:
+        t_start_x = _signals_same_tstart(spiketrains)
+    if t_start_y is None:
+        t_start_y = _signals_same_tstart(spiketrains)
 
     t_stop_x = dt + t_start_x
     t_stop_y = dt + t_start_y
@@ -109,7 +304,7 @@ def intersection_matrix(spiketrains, binsize, dt, t_start_x=None,
     t_stop_max = max(t_stop_x, t_stop_y)
     for i, st in enumerate(spiketrains):
         if not (st.t_stop > t_stop_max or
-        __quantities_almost_equal(st.t_stop, t_stop_max)):
+        _quantities_almost_equal(st.t_stop, t_stop_max)):
             msg = 'SpikeTrain %d is shorter than the required time ' % i + \
                 'span: t_stop (%s) < %s' % (st.t_stop, t_stop_max)
             raise ValueError(msg)
@@ -124,10 +319,12 @@ def intersection_matrix(spiketrains, binsize, dt, t_start_x=None,
     # nested for loops (more memory efficient)
     try:  # try the fast version
         # Compute the binned spike train matrices, along both time axes
-        bsts_x = rep.binned_st(sts_x, binsize=binsize, t_start=t_start_x,
-            t_stop=t_stop_x).matrix_clipped()
-        bsts_y = rep.binned_st(sts_y, binsize=binsize, t_start=t_start_y,
-            t_stop=t_stop_y).matrix_clipped()
+        bsts_x = conv.BinnedSpikeTrain(
+            sts_x, binsize=binsize,
+            t_start=t_start_x, t_stop=t_stop_x).to_bool_array()
+        bsts_y = conv.BinnedSpikeTrain(
+            sts_y, binsize=binsize,
+            t_start=t_start_y, t_stop=t_stop_y).to_bool_array()
 
         # Compute the number of spikes in each bin, for both time axes
         spikes_per_bin_x = bsts_x.sum(axis=0)
@@ -165,10 +362,10 @@ def intersection_matrix(spiketrains, binsize, dt, t_start_x=None,
 
     except MemoryError:  # use the memory-efficient version
         # Compute the list spiking neurons per bin, along both axes
-        ids_per_bin_x = rep.transactions(sts_x, binsize, t_start=t_start_x,
-            t_stop=t_stop_x)
-        ids_per_bin_y = rep.transactions(sts_y, binsize, t_start=t_start_y,
-            t_stop=t_stop_y)
+        ids_per_bin_x = transactions(
+            sts_x, binsize, t_start=t_start_x, t_stop=t_stop_x)
+        ids_per_bin_y = transactions(
+            sts_y, binsize, t_start=t_start_y, t_stop=t_stop_y)
 
         # Generate the intersection matrix
         N_bins = len(ids_per_bin_x)
@@ -176,8 +373,8 @@ def intersection_matrix(spiketrains, binsize, dt, t_start_x=None,
         for ii in xrange(N_bins):
             for jj in xrange(N_bins):
                 if len(ids_per_bin_x[ii]) * len(ids_per_bin_y[jj]) != 0:
-                    imat[ii, jj] = len(set(ids_per_bin_x[ii]).intersection(\
-                    set(ids_per_bin_y[jj])))
+                    imat[ii, jj] = len(set(ids_per_bin_x[ii]).intersection(
+                        set(ids_per_bin_y[jj])))
                     # Normalise according to the desired normalisation type:
                     if norm == 1:
                         imat[ii, jj] /= float(min(len(ids_per_bin_x[ii]),
@@ -186,8 +383,8 @@ def intersection_matrix(spiketrains, binsize, dt, t_start_x=None,
                         imat[ii, jj] /= np.sqrt(float(
                             len(ids_per_bin_x[ii]) * len(ids_per_bin_y[jj])))
                     if norm == 3:
-                        imat[ii, jj] /= float(len(set(ids_per_bin_x[ii] \
-                            ).union(set(ids_per_bin_y[jj]))))
+                        imat[ii, jj] /= float(len(set(ids_per_bin_x[ii]
+                                                      ).union(set(ids_per_bin_y[jj]))))
 
     # Compute the time edges corresponding to the binning employed
     t_start_x_dl = t_start_x.rescale(binsize.units).magnitude
@@ -203,7 +400,7 @@ def intersection_matrix(spiketrains, binsize, dt, t_start_x=None,
 
 
 def intersection_matrix_sparse(
-    spiketrains, binsize, dt, t_start_x=None, t_start_y=None, norm=None):
+        spiketrains, binsize, dt, t_start_x=None, t_start_y=None, norm=None):
     """
     Generates the intersection matrix from a list of spike trains as a sparse
     matrix (memory-efficient)
@@ -249,10 +446,10 @@ def intersection_matrix_sparse(
         a matrix of shape (n, n), y_edges has length n+1
     """
     # Setting the start and stop time for the x and y axes:
-    if t_start_x == None:
-        t_start_x = conditions.signals_same_tstart(spiketrains)
-    if t_start_y == None:
-        t_start_y = conditions.signals_same_tstart(spiketrains)
+    if t_start_x is None:
+        t_start_x = _signals_same_tstart(spiketrains)
+    if t_start_y is None:
+        t_start_y = _signals_same_tstart(spiketrains)
 
     t_stop_x = t_start_x + dt
     t_stop_y = t_start_y + dt
@@ -271,10 +468,10 @@ def intersection_matrix_sparse(
         for st in spiketrains]
 
     # Compute the list spiking neurons per bin, along both axes
-    ids_per_bin_x = rep.transactions(sts_x, binsize, t_start=t_start_x,
-        t_stop=t_stop_x)
-    ids_per_bin_y = rep.transactions(sts_y, binsize, t_start=t_start_y,
-        t_stop=t_stop_y)
+    ids_per_bin_x = transactions(
+        sts_x, binsize, t_start=t_start_x, t_stop=t_stop_x)
+    ids_per_bin_y = transactions(
+        sts_y, binsize, t_start=t_start_y, t_stop=t_stop_y)
 
     # Build the sparse intersection matrix, represented by the lists row,
     # col and data of first and second indices of each entry, and associated
@@ -320,7 +517,7 @@ def intersection_matrix_sparse(
 
 # TODO: think about a smart filter_imat_par() that parallelizes the filtering
 def filter_matrix(
-    mat, l, w=2, diag=0, inf2int=20, filt_type='mean', min_pv=1e-5):
+        mat, l, w=2, diag=0, inf2int=20, filt_type='mean', min_pv=1e-5):
     """
     Filters a matrix mat by convolving it with a rectangular kernel.
 
@@ -397,7 +594,6 @@ def filter_matrix(
     mat[mat == np.inf] = inf2int
     mat[mat == -np.inf] = -inf2int
 
-
     # Initialize the filtered matrix as a matrix of zeroes
     fmat = np.zeros(mat.shape, dtype=np.float32)
 
@@ -419,12 +615,13 @@ def filter_matrix(
             # multiply each row (patch) by the flattened filter, sorted in
             # increasing order and retain the last l columns only and average
             # along rows
-            largest_vals = np.sort(row_patches * flattened_filt, axis=1)[:, -l:]
+            largest_vals = np.sort(
+                row_patches * flattened_filt, axis=1)[:, -l:]
             if filt_type == 'mean':
                 avgs = largest_vals.mean(axis=1)
             elif filt_type == 'prod':
                 pvals = np.maximum(1. - largest_vals, min_pvs)
-                avgs = 1. - np.prod(pvals**(1./l), axis=1)
+                avgs = 1. - np.prod(pvals**(1. / l), axis=1)
             else:
                 raise ValueError("type (%s) must be 'mean' or 'prod'" % type)
 
@@ -543,7 +740,7 @@ def remove_diagonal(mat, diag):
         diag = [diag]
 
     n = mat.shape[0]
-    diags_left = [i for i in xrange(1-n, n) if i not in diag]
+    diags_left = [i for i in xrange(1 - n, n) if i not in diag]
 
     return np.hstack([mat.diagonal(i) for i in diags_left])
 
@@ -649,7 +846,7 @@ def _reference_diagonal(x_edges, y_edges):
     if y_edges[0] > x_edges[0]:
         if y_edges[0] < x_edges[-1]:
             bin_ids = np.where(
-                __quantities_almost_equal(x_edges, y_edges[0]))[0]
+                _quantities_almost_equal(x_edges, y_edges[0]))[0]
             if len(bin_ids) == 0:
                 raise ValueError(error_msg)
             diag_id = - bin_ids[0]
@@ -685,7 +882,7 @@ def fimat_quantiles_H0(
     Each surrogate matrix is obtained from imat by random permutation of its
     upper triangular part. The surrogate matrix is then filtered like imat,
     and the quantiles of its entries associated to the desired p-values are
-    computed and averaged across surrogates.
+    computed and averaged across spike_train_surrogates.
 
     NOTE: In principle, each quantile could be obtained in two ways:
     1) (direct) by collecting the entries in each filtered surrogate matrix,
@@ -710,7 +907,7 @@ def fimat_quantiles_H0(
         threshold(s).
         Default: 0.01
     n_surr : int, optional
-        number of surrogates to generate for the bootstrap procedure
+        number of spike_train_surrogates to generate for the bootstrap procedure
     rnd_type : str, optional
         type of matrix randomization. Can be either:
         * 'full': the whole matrix is randomly shuffled
@@ -746,7 +943,7 @@ def fimat_quantiles_H0(
     # (the "reference" diagonal)
     diag_id, elements = _reference_diagonal(x_edges, y_edges)
 
-    # To avoid bias in the pdf of fimat's entries estimated via surrogates,
+    # To avoid bias in the pdf of fimat's entries estimated via spike_train_surrogates,
     # replace the reference diagonal of imat with 0.5 (if imat is a
     # probability matrix) or 0 (if imat is a surprise matrix)
     # Trick to discriminate: in a surprise matrix, the max is > 1
@@ -764,7 +961,8 @@ def fimat_quantiles_H0(
     # Initialise the quantiles to zero
     quants = 0 if not hasattr(p, '__len__') else np.zeros((1, len(p)))
 
-    # Generate surrogates by matrix permutation, and compute quantiles
+    # Generate spike_train_surrogates by matrix permutation, and compute
+    # quantiles
     if verbose:
         print 'fimat_quantiles_H0(): begin bootstrap'
 
@@ -817,7 +1015,7 @@ def mask_imat(imat, fimat, thresh_fimat, thresh_imat):
     fimat : ndarray
         filtered intersection matrix
     thresh_fimat : float
-        first threshold, from surrogates with permuted entries
+        first threshold, from spike_train_surrogates with permuted entries
     thresh_imat : float
         second threshold, from dithered spike trains
 
@@ -960,7 +1158,7 @@ def cluster(mat, eps=10, min=2, stretch=5):
     xpos_sgnf, ypos_sgnf = np.where(mat > 0)
 
     # Compute the matrix D[i, j] of euclidean distances among pixels i and j
-    D = __stretched_metric_2d(
+    D = _stretched_metric_2d(
         xpos_sgnf, ypos_sgnf, stretch=stretch, ref_angle=45)
 
     # Cluster positions of significant pixels via dbscan
@@ -989,7 +1187,7 @@ def pmat_montecarlo(
     The method produces surrogate spike trains (using one of several methods
     at disposal, see below) and calculates their intersection matrix M.
     For each entry (i, j), the intersection cdf P[i, j] is then given by:
-        P[i, j] = #(surrogates such that M[i, j] < I[i, j]) / #(surrogates)
+        P[i, j] = #(spike_train_surrogates such that M[i, j] < I[i, j]) / #(spike_train_surrogates)
 
     If P[i, j] is large (close to 1), I[i, j] is statistically significant:
     the probability to observe an overlap equal to or larger then I[i, j]
@@ -1012,11 +1210,11 @@ def pmat_montecarlo(
         Default: None
     surr_method : str, optional
         the method to use to generate surrogate spike trains. Can be one of:
-        * 'train_shifting': see surrogates.train_shifting() [dt needed]
-        * 'spike_dithering': see surrogates.spike_dithering() [dt needed]
-        * 'spike_jittering': see surrogates.spike_jittering() [dt needed]
-        * 'spike_time_rand': see surrogates.spike_time_rand()
-        * 'isi_shuffling': see surrogates.isi_shuffling()
+        * 'train_shifting': see spike_train_surrogates.train_shifting() [dt needed]
+        * 'spike_dithering': see spike_train_surrogates.spike_dithering() [dt needed]
+        * 'spike_jittering': see spike_train_surrogates.spike_jittering() [dt needed]
+        * 'spike_time_rand': see spike_train_surrogates.spike_time_rand()
+        * 'isi_shuffling': see spike_train_surrogates.isi_shuffling()
         Default: 'train_shifting'
     j : Quantity, optional
         For methods shifting spike times randomly around their original time
@@ -1025,7 +1223,7 @@ def pmat_montecarlo(
         shift / window. For other methods, j is ignored.
         Default: None
     n_surr : int, optional
-        number of surrogates to generate for the bootstrap procedure.
+        number of spike_train_surrogates to generate for the bootstrap procedure.
         Default: 100
 
     Returns
@@ -1043,9 +1241,10 @@ def pmat_montecarlo(
         t_start_y=t_start_y)
 
     # Generate surrogate spike trains as a list surrs; for each spike train
-    # i, surrs[i] is a list of length n_surr, containing the surrogates of i
-    surrs = [surrogates.surrogates(
-        st, n=n_surr, surr_method=surr_method, dt=j, decimals=None, edges='[')
+    # i, surrs[i] is a list of length n_surr, containing the
+    # spike_train_surrogates of i
+    surrs = [spike_train_surrogates.surrogates(
+        st, n=n_surr, surr_method=surr_method, dt=j, decimals=None, edges=True)
         for st in spiketrains]
 
     # Compute the p-value matrix pmat; pmat[i, j] counts the fraction of
@@ -1071,7 +1270,7 @@ def pmat_montecarlo(
 
 def pmat_analytical_poisson_old(
         spiketrains, binsize, dt, t_start_x=None, t_start_y=None,
-        fir_rates = 'estimate', kernel_width=100 * pq.ms):
+        fir_rates='estimate', kernel_width=100 * pq.ms):
     '''
     Given a list of spike trains, approximates the cumulative probability of
     each entry in their intersection matrix (see: intersection_matrix())
@@ -1126,14 +1325,14 @@ def pmat_analytical_poisson_old(
     '''
 
     # Bin the spike trains
-    bsts = rep.binned_st(spiketrains, binsize=binsize)
+    bsts = conv.BinnedSpikeTrain(spiketrains, binsize=binsize)
 
     if fir_rates == 'estimate':
         # Create the boxcar kernel and convolve it with the binned spike trains
         k = int((kernel_width / binsize).rescale(pq.dimensionless))
         kernel = np.ones(k) * 1. / k
         fir_rate = np.vstack([np.convolve(bst, kernel, mode='same')
-            for bst in bsts.matrix_clipped()])
+            for bst in bsts.to_bool_array()])
 
         # The convolution results in an array which decreases at the borders due
         # to absence of spikes beyond the borders. Replace the first and last
@@ -1158,7 +1357,8 @@ def pmat_analytical_poisson_old(
 
     # For each neuron k compute the matrix of probabilities p_ijk that neuron
     # k spikes in both bins i and j. (For i = j it's just spike_probs[k][i])
-    # HINT may be slower, but could try calculating bin for bin instead of the whole matrix at once
+    # HINT may be slower, but could try calculating bin for bin instead of the
+    # whole matrix at once
     spike_prob_mats = [np.outer(prob, prob) for prob in spike_probs]
 
     # Compute the matrix Mu[i, j] of parameters for the Poisson distributions
@@ -1177,8 +1377,8 @@ def pmat_analytical_poisson_old(
 
 
 def pmat_analytical_poisson(
-    spiketrains, binsize, dt, t_start_x=None, t_start_y=None,
-    fir_rates='estimate', kernel_width=100 * pq.ms, verbose=False):
+        spiketrains, binsize, dt, t_start_x=None, t_start_y=None,
+        fir_rates='estimate', kernel_width=100 * pq.ms, verbose=False):
     '''
     Given a list of spike trains, approximates the cumulative probability of
     each entry in their intersection matrix (see: intersection_matrix()).
@@ -1241,15 +1441,15 @@ def pmat_analytical_poisson(
     '''
 
     # Bin the spike trains
-    t_stop_x = None if t_start_x == None else t_start_x + dt
-    t_stop_y = None if t_start_y == None else t_start_y + dt
-    bsts_x = rep.binned_st(
+    t_stop_x = None if t_start_x is None else t_start_x + dt
+    t_stop_y = None if t_start_y is None else t_start_y + dt
+    bsts_x = conv.BinnedSpikeTrain(
         spiketrains, binsize=binsize, t_start=t_start_x, t_stop=t_stop_x)
-    bsts_y = rep.binned_st(
+    bsts_y = conv.BinnedSpikeTrain(
         spiketrains, binsize=binsize, t_start=t_start_y, t_stop=t_stop_y)
 
-    bsts_x_matrix = bsts_x.matrix_clipped()
-    bsts_y_matrix = bsts_y.matrix_clipped()
+    bsts_x_matrix = bsts_x.to_bool_array()
+    bsts_y_matrix = bsts_y.to_bool_array()
 
     # Check that the duration and nr. neurons is identical between the two axes
     if bsts_x_matrix.shape != bsts_y_matrix.shape:
@@ -1324,9 +1524,9 @@ def pmat_analytical_poisson(
         # Interpolate in the time bins and convert to Quantities
         times_x = bsts_x.edges[:-1]
         times_y = bsts_y.edges[:-1]
-        fir_rate_x = pq.Hz * np.vstack([stocmod._analog_signal_step_interp(
+        fir_rate_x = pq.Hz * np.vstack([_analog_signal_step_interp(
             signal, times_x).rescale('Hz').magnitude for signal in fir_rates])
-        fir_rate_y = pq.Hz * np.vstack([stocmod._analog_signal_step_interp(
+        fir_rate_y = pq.Hz * np.vstack([_analog_signal_step_interp(
             signal, times_y).rescale('Hz').magnitude for signal in fir_rates])
 
     else:
@@ -1393,18 +1593,18 @@ def _jsf_uniform_orderstat_3d(u, alpha, n):
 
     # Define ranges [1,...,n], [2,...,n], ..., [d,...,n] for the mute variables
     # used to compute the integral as a sum over several possibilities
-    lists = [xrange(j, n+1) for j in xrange(d, 0, -1)]
+    lists = [xrange(j, n + 1) for j in xrange(d, 0, -1)]
 
     # Compute the log of the integral's coefficient
-    logK = np.sum(np.log(np.arange(1, n+1))) - n * np.log(1 - alpha)
+    logK = np.sum(np.log(np.arange(1, n + 1))) - n * np.log(1 - alpha)
 
     # Add to the 3D matrix u a bottom layer identically equal to alpha and a
     # top layer identically equal to 1. Then compute the difference dU along
     # the first dimension.
-    u_extended = np.ones((d+2, A, B))
+    u_extended = np.ones((d + 2, A, B))
     u_extended[0] = u_extended[0] * alpha
     for layer_idx, uu in enumerate(u):
-        u_extended[layer_idx+1] = u[layer_idx]
+        u_extended[layer_idx + 1] = u[layer_idx]
     dU = np.diff(u_extended, axis=0)  # shape (d+1, A, B)
     del u_extended
 
@@ -1479,7 +1679,7 @@ def _pmat_neighbors(mat, filter_shape, nr_largest=None, diag=0):
 
     '''
     l, w = filter_shape
-    d = l  if nr_largest is None else nr_largest
+    d = l if nr_largest is None else nr_largest
 
     # Check consistent arguments
     assert mat.shape[0] == mat.shape[1], 'mat must be a square matrix'
@@ -1516,8 +1716,10 @@ def _pmat_neighbors(mat, filter_shape, nr_largest=None, diag=0):
                 row_patches[x, :] = (mat[y:y + l, x:x + l]).flatten()
             # take the l largest values in each row (patch) and assign them
             # to the corresponding row in lmat
-            largest_vals = np.sort(row_patches * flattened_filt, axis=1)[:, -d:]
-            lmat[:, y + (l // 2), (l // 2): (l // 2) + N_bin - l + 1] = largest_vals.T
+            largest_vals = np.sort(
+                row_patches * flattened_filt, axis=1)[:, -d:]
+            lmat[
+                :, y + (l // 2), (l // 2): (l // 2) + N_bin - l + 1] = largest_vals.T
 
     except MemoryError:  # if too large, do it serially by for loops
         for y in bin_range:  # one step to the right;
@@ -1531,7 +1733,7 @@ def _pmat_neighbors(mat, filter_shape, nr_largest=None, diag=0):
 
 
 def joint_probability_matrix(
-    pmat, filter_shape, nr_largest=None, alpha=0, pvmin=1e-5):
+        pmat, filter_shape, nr_largest=None, alpha=0, pvmin=1e-5):
     '''
     Map a probability matrix pmat to a joint probability matrix jmat, where
     jmat[i, j] is the joint p-value of the largest neighbors of pmat[i, j].
@@ -1594,14 +1796,14 @@ def joint_probability_matrix(
     '''
     # Find for each P_ij in the probability matrix its neighbors and maximize
     # them by the maximum value 1-pvmin
-    pmat_neighb = __pmat_neighbors(
+    pmat_neighb = _pmat_neighbors(
         pmat, filter_shape=filter_shape, nr_largest=nr_largest, diag=0)
     pmat_neighb = np.minimum(pmat_neighb, 1. - pvmin)
 
     # Compute the joint p-value matrix jpvmat
     l, w = filter_shape
     n = l * (1 + 2 * w) - w * (w + 1)  # number of entries covered by kernel
-    jpvmat = __jsf_uniform_orderstat_3d(pmat_neighb, alpha, n)
+    jpvmat = _jsf_uniform_orderstat_3d(pmat_neighb, alpha, n)
 
     return 1 - jpvmat
 
@@ -1688,26 +1890,28 @@ def extract_sse(spiketrains, x_edges, y_edges, cmat, ids=[]):
     # Compute the transactions associated to the two binnings
     binsize_x = x_edges[1] - x_edges[0]
     t_start_x, t_stop_x = x_edges[0], x_edges[-1]
-    tracts_x = rep.transactions(
+    tracts_x = transactions(
         spiketrains, binsize=binsize_x, t_start=t_start_x, t_stop=t_stop_x,
         ids=ids)
     binsize_y = y_edges[1] - y_edges[0]
     t_start_y, t_stop_y = y_edges[0], y_edges[-1]
-    tracts_y = rep.transactions(
+    tracts_y = transactions(
         spiketrains, binsize=binsize_y, t_start=t_start_y, t_stop=t_stop_y,
         ids=ids)
 
     # Find the reference diagonal, whose elements correspond to same time bins
-    diag_id, elements = _reference_diagonal(x_edges, y_edges)
+    diag_id, _ = _reference_diagonal(x_edges, y_edges)
 
     # Reconstruct each worm, link by link
     sse_dict = {}
     for k in xrange(1, nr_worms + 1):  # for each worm
         worm_k = {}  # worm k is a list of links (each link will be 1 sublist)
         pos_worm_k = np.array(np.where(cmat == k)).T  # position of all links
-        if all([y - x != diag_id for (x, y) in pos_worm_k]):  # if no link lies on the reference diagonal
+        # if no link lies on the reference diagonal
+        if all([y - x != diag_id for (x, y) in pos_worm_k]):
             for l, (bin_x, bin_y) in enumerate(pos_worm_k):  # for each link
-                link_l = set(tracts_x[bin_x]).intersection(tracts_y[bin_y])  # reconstruct the link
+                link_l = set(tracts_x[bin_x]).intersection(
+                    tracts_y[bin_y])  # reconstruct the link
                 worm_k[(bin_x, bin_y)] = link_l  # and assign it to its pixel
             sse_dict[k] = worm_k
 
@@ -1767,7 +1971,7 @@ def sse_intersection(sse1, sse2, intersection='linkwise'):
         pass
     else:
         raise ValueError(
-            "intersection (=%s) can only be" % intersection + \
+            "intersection (=%s) can only be" % intersection +
             " 'pixelwise' or 'linkwise'")
 
     return sse_new
@@ -1823,7 +2027,7 @@ def sse_difference(sse1, sse2, difference='linkwise'):
                     del sse_new[pixel1]
             else:
                 raise ValueError(
-                    "difference (=%s) can only be" % difference + \
+                    "difference (=%s) can only be" % difference +
                     " 'pixelwise' or 'linkwise'")
 
     return sse_new
@@ -2044,12 +2248,12 @@ def sse_overlap(sse1, sse2):
         returns True if sse1 strictly contains sse2.
 
     '''
-    return not (sse_issub(sse1, sse2) or sse_issuper(sse1, sse2) or \
+    return not (sse_issub(sse1, sse2) or sse_issuper(sse1, sse2) or
                 sse_isequal(sse1, sse2) or sse_isdisjoint(sse1, sse2))
 
 
 __doc__ = \
-' \
+    ' \
 WORMS is a statistical method for the detection of repeating sequences of \n \
 synchronous spiking events in parallel spike trains. \n\n\
 Given a list sts of SpikeTrains, the analysis comprises the following \

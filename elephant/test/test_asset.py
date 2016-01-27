@@ -11,7 +11,7 @@ import scipy
 import elephant.asset as asset
 
 
-stretchedmetric2d = asset.__stretched_metric_2d
+stretchedmetric2d = asset._stretched_metric_2d
 cluster = asset.cluster
 
 
@@ -130,7 +130,7 @@ class AssetTestCase(unittest.TestCase):
 
 
 def suite():
-    suite = unittest.makeSuite(WormsTestCase, 'test')
+    suite = unittest.makeSuite(AssetTestCase, 'test')
     return suite
 
 

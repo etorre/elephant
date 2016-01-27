@@ -18,7 +18,7 @@ import jelephant.core.stocmod as stocmod
 from sklearn.cluster import dbscan as dbscan
 
 
-def __quantities_almost_equal(x, y):
+def _quantities_almost_equal(x, y):
     '''
     Returns True if two quantities are almost equal, i.e. if x-y is
     "very close to 0" (not larger than machine precision for floats).
@@ -836,7 +836,7 @@ def mask_imat(imat, fimat, thresh_fimat, thresh_imat):
     return masked_imat
 
 
-def __stretched_metric_2d(x, y, stretch, ref_angle):
+def _stretched_metric_2d(x, y, stretch, ref_angle):
     '''
     Given a list of points on the real plane, identified by their absciss x
     and ordinate y, compute a stretched transformation of the Euclidean
@@ -1377,7 +1377,7 @@ def pmat_analytical_poisson(
     return pmat, xx, yy
 
 
-def __jsf_uniform_orderstat_3d(u, alpha, n):
+def _jsf_uniform_orderstat_3d(u, alpha, n):
     '''
     Considered n independent random variables X1, X2, ..., Xn all having
     uniform distribution in the interval (alpha, 1):
@@ -1440,7 +1440,7 @@ def __jsf_uniform_orderstat_3d(u, alpha, n):
     return Ptot
 
 
-def __pmat_neighbors(mat, filter_shape, nr_largest=None, diag=0):
+def _pmat_neighbors(mat, filter_shape, nr_largest=None, diag=0):
     '''
     Build the 3D matrix L of largest neighbors of elements in a 2D matrix mat.
 

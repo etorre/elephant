@@ -7,7 +7,7 @@ Created on Wed Oct 22 14:35:49 2014
 
 import unittest
 import numpy as np
-import scipy
+import scipy.spatial
 import elephant.asset as asset
 
 
@@ -130,7 +130,7 @@ class AssetTestCase(unittest.TestCase):
 
 
 def suite():
-    suite = unittest.makeSuite(WormsTestCase, 'test')
+    suite = unittest.makeSuite(AssetTestCase, 'test')
     return suite
 
 

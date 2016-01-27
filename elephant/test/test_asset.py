@@ -2,20 +2,20 @@
 """
 Created on Wed Oct 22 14:35:49 2014
 
-@author: quaglio
+@author: torre
 """
 
 import unittest
 import numpy as np
 import scipy
-import jelephant.analysis.worms as worms
+import elephant.asset as asset
 
 
-stretchedmetric2d = worms.__stretched_metric_2d
-cluster = worms.cluster
+stretchedmetric2d = asset.__stretched_metric_2d
+cluster = asset.cluster
 
 
-class WormsTestCase(unittest.TestCase):
+class AssetTestCase(unittest.TestCase):
 
     def test_stretched_metric_2d_size(self):
         nr_points = 4
@@ -84,13 +84,13 @@ class WormsTestCase(unittest.TestCase):
         diff_ab_linkwise = {(1, 2): set([3]), (3, 4): set([5, 6])}
         diff_ba_linkwise = {(1, 2): set([5]), (5, 6): set([0, 2])}
         self.assertEqual(
-            worms.sse_difference(a, b, 'pixelwise'), diff_ab_pixelwise)
+            asset.sse_difference(a, b, 'pixelwise'), diff_ab_pixelwise)
         self.assertEqual(
-            worms.sse_difference(b, a, 'pixelwise'), diff_ba_pixelwise)
+            asset.sse_difference(b, a, 'pixelwise'), diff_ba_pixelwise)
         self.assertEqual(
-            worms.sse_difference(a, b, 'linkwise'), diff_ab_linkwise)
+            asset.sse_difference(a, b, 'linkwise'), diff_ab_linkwise)
         self.assertEqual(
-            worms.sse_difference(b, a, 'linkwise'), diff_ba_linkwise)
+            asset.sse_difference(b, a, 'linkwise'), diff_ba_linkwise)
 
     def test_sse_intersection(self):
         a = {(1,2): set([1,2,3]), (3,4): set([5,6]), (6,7): set([0,1])}
@@ -100,33 +100,33 @@ class WormsTestCase(unittest.TestCase):
         inters_ab_linkwise = {(1, 2): set([1, 2]), (6, 7): set([0, 1])}
         inters_ba_linkwise = {(1, 2): set([1, 2]), (6, 7): set([0, 1])}
         self.assertEqual(
-            worms.sse_intersection(a, b, 'pixelwise'), inters_ab_pixelwise)
+            asset.sse_intersection(a, b, 'pixelwise'), inters_ab_pixelwise)
         self.assertEqual(
-            worms.sse_intersection(b, a, 'pixelwise'), inters_ba_pixelwise)
+            asset.sse_intersection(b, a, 'pixelwise'), inters_ba_pixelwise)
         self.assertEqual(
-            worms.sse_intersection(a, b, 'linkwise'), inters_ab_linkwise)
+            asset.sse_intersection(a, b, 'linkwise'), inters_ab_linkwise)
         self.assertEqual(
-            worms.sse_intersection(b, a, 'linkwise'), inters_ba_linkwise)
+            asset.sse_intersection(b, a, 'linkwise'), inters_ba_linkwise)
 
     def test_sse_relations(self):
         a = {(1,2): set([1,2,3]), (3,4): set([5,6]), (6,7): set([0,1])}
         b = {(1,2): set([1,2,5]), (5,6): set([0,2]), (6,7): set([0,1])}
         c = {(5,6): set([0,2])}
         d = {(3,4): set([0,1]), (5,6): set([0,1,2])}
-        self.assertTrue(worms.sse_isequal({}, {}))
-        self.assertTrue(worms.sse_isequal(a, a))
-        self.assertFalse(worms.sse_isequal(b, c))
-        self.assertTrue(worms.sse_isdisjoint(a, c))
-        self.assertTrue(worms.sse_isdisjoint(a, d))
-        self.assertFalse(worms.sse_isdisjoint(a, b))
-        self.assertTrue(worms.sse_issub(c, b))
-        self.assertTrue(worms.sse_issub(c, d))
-        self.assertFalse(worms.sse_issub(a, b))
-        self.assertTrue(worms.sse_issuper(b, c))
-        self.assertTrue(worms.sse_issuper(d, c))
-        self.assertFalse(worms.sse_issuper(a, b))
-        self.assertTrue(worms.sse_overlap(a, b))
-        self.assertFalse(worms.sse_overlap(c, d))
+        self.assertTrue(asset.sse_isequal({}, {}))
+        self.assertTrue(asset.sse_isequal(a, a))
+        self.assertFalse(asset.sse_isequal(b, c))
+        self.assertTrue(asset.sse_isdisjoint(a, c))
+        self.assertTrue(asset.sse_isdisjoint(a, d))
+        self.assertFalse(asset.sse_isdisjoint(a, b))
+        self.assertTrue(asset.sse_issub(c, b))
+        self.assertTrue(asset.sse_issub(c, d))
+        self.assertFalse(asset.sse_issub(a, b))
+        self.assertTrue(asset.sse_issuper(b, c))
+        self.assertTrue(asset.sse_issuper(d, c))
+        self.assertFalse(asset.sse_issuper(a, b))
+        self.assertTrue(asset.sse_overlap(a, b))
+        self.assertFalse(asset.sse_overlap(c, d))
 
 
 def suite():

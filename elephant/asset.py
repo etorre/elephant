@@ -432,13 +432,13 @@ def intersection_matrix_sparse(
 
     Returns
     -------
-    imat_sparse: numpy.array of floats
+    imat_sparse: numpy.ndarray of floats
         the intersection matrix of a list of spike trains, as a sparse matrix
         from module scipy.sparse
-    x_edges : ndarray
+    x_edges : numpy.ndarray
         edges of the bins used for the horizontal axis of imat. If imat is
         a matrix of shape (n, n), x_edges has length n+1
-    y_edges : ndarray
+    y_edges : numpy.ndarray
         edges of the bins used for the vertical axis of imat. If imat is
         a matrix of shape (n, n), y_edges has length n+1
     """
@@ -539,7 +539,7 @@ def filter_matrix(
 
     Parameters
     ----------
-    mat : array of floats
+    mat : numpy.ndarray of floats
         intersection matrix to be filtered
     l : int
         length of the filter. 1 corresponds to effectively not filtering mat
@@ -568,7 +568,7 @@ def filter_matrix(
 
     Returns
     -------
-    fmat : ndarray of floats (same shape as mat)
+    fmat : numpy.ndarray of floats (same shape as mat)
         the filtered intersection matrix
     """
 
@@ -1294,32 +1294,32 @@ def pmat_analytical_poisson_old(
 
     Parameters
     ----------
-    sts : list of SpikeTrains
+    sts : list of neo.SpikeTrains
         list of spike trains for whose intersection matrix to compute the
         p-values
-    binsize : Quantity
+    binsize : quantities.Quantity
         width of the time bins used to compute the probability matrix
-    dt : Quantity
+    dt : quantities.Quantity
         time span for which to consider the given SpikeTrains
-    t_start_x, t_start_y : Quantity, optional
+    t_start_x, t_start_y : quantities.Quantity, optional
         time start of the binning for the first and second axes of the
         intersection matrix, respectively.
         If None (default) the attribute t_start of the SpikeTrains is used
         (if the same for all spike trains).
         Default: None
-    fir_rates: list of neo.AnalogSignal, or string 'estimate'; optional
+    fir_rates: list of neo.AnalogSignal or string 'estimate', optional
         if a list, fir_rate[i] is the firing rate of the spike train
         spiketrains[i]. If 'estimate', firing rates are estimated by simple
         boxcar kernel convolution, with specified kernel width (see below)
         Default: 'estimate'
-    kernel_width : Quantity, optional
+    kernel_width : quantities.Quantity, optional
         total width of the kernel used to estimate the rate profiles when
         fir_rates='estimate'.
         Default: 100 * pq.ms
 
     Returns
     -------
-    pmat : ndarray
+    pmat : numpy.ndarray
         the cumulative probability matrix. pmat[i, j] represents the
         estimated probability of having an overlap between bins i and j
         STRICTLY LOWER THAN the observed overlap, under the null hypothesis
@@ -1329,6 +1329,7 @@ def pmat_analytical_poisson_old(
     # Bin the spike trains
     bsts = conv.BinnedSpikeTrain(spiketrains, binsize=binsize)
 
+    # Estimate rates using kernel convolution, if requested
     if fir_rates == 'estimate':
         # Create the boxcar kernel and convolve it with the binned spike trains
         k = int((kernel_width / binsize).rescale(pq.dimensionless))
@@ -1401,14 +1402,14 @@ def pmat_analytical_poisson(
 
     Parameters
     ----------
-    sts : list of SpikeTrains
+    sts : list of neo.SpikeTrains
         list of spike trains for whose intersection matrix to compute the
         p-values
-    binsize : Quantity
+    binsize : quantities.Quantity
         width of the time bins used to compute the probability matrix
-    dt : Quantity
+    dt : quantities.Quantity
         time span for which to consider the given SpikeTrains
-    t_start_x, t_start_y : Quantity, optional
+    t_start_x, t_start_y : quantities.Quantity, optional
         time start of the binning for the first and second axes of the
         intersection matrix, respectively.
         If None (default) the attribute t_start of the SpikeTrains is used
@@ -1419,7 +1420,7 @@ def pmat_analytical_poisson(
         spiketrains[i]. If 'estimate', firing rates are estimated by simple
         boxcar kernel convolution, with specified kernel width (see below)
         Default: 'estimate'
-    kernel_width : Quantity, optional
+    kernel_width : quantities.Quantity, optional
         total width of the kernel used to estimate the rate profiles when
         fir_rates='estimate'.
         Default: 100 * pq.ms
@@ -1429,15 +1430,15 @@ def pmat_analytical_poisson(
 
     Returns
     -------
-    pmat : ndarray
+    pmat : numpy.ndarray
         the cumulative probability matrix. pmat[i, j] represents the
         estimated probability of having an overlap between bins i and j
         STRICTLY LOWER THAN the observed overlap, under the null hypothesis
         of independence of the input spike trains.
-    x_edges : ndarray
+    x_edges : numpy.ndarray
         edges of the bins used for the horizontal axis of pmat. If pmat is
         a matrix of shape (n, n), x_edges has length n+1
-    y_edges : ndarray
+    y_edges : numpy.ndarray
         edges of the bins used for the vertical axis of pmat. If pmat is
         a matrix of shape (n, n), y_edges has length n+1
     '''
@@ -1547,7 +1548,7 @@ def pmat_analytical_poisson(
     # For each neuron k compute the matrix of probabilities p_ijk that neuron
     # k spikes in both bins i and j. (For i = j it's just spike_probs[k][i])
     spike_prob_mats = [np.outer(probx, proby) for (probx, proby) in
-        zip(spike_probs_x, spike_probs_y)]
+                       zip(spike_probs_x, spike_probs_y)]
 
     # Compute the matrix Mu[i, j] of parameters for the Poisson distributions
     # which describe, at each (i, j), the approximated overlap probability.
@@ -1590,6 +1591,30 @@ def _jsf_uniform_orderstat_3d(u, alpha, n):
     (jsf) of the d highest order statistics (U_{n-d+1}, U_{n-d+2}, ..., U_n),
     where U_i := "i-th highest X's" at each u_ij, i.e.:
                 jsf(u_ij) = Prob(U_{n-k} >= u_ijk, k=0,1,..., d-1).
+
+    Arguments
+    ---------
+    u : numpy.ndarray of shape (A, B, d)
+        3D matrix of floats between 0 and 1.
+        Each vertical column u_ij is an array of length d, considered a set of
+        `d` largest order statistics extracted from a sample of `n` random
+        variables whose cdf is F(x)=x for each x.
+        The routine computes the joint cumulative probability of the `d`
+        values in u_ij, for each i and j.
+    alpha : float in [0, 1)
+        range where the values of `u` are assumed to vary.
+        alpha is 0 in the standard ASSET analysis.
+    n : int
+        size of the sample where the d largest order statistics u_ij are
+        assumed to have been sampled from
+
+    Returns
+    -------
+    S : numpy.ndarray of shape (A, B)
+        matrix of joint survival probabilities. s_ij is the joint survival
+        probability of the values {u_ijk, k=0,...,d-1}.
+        Note: the joint probability matrix computed for the ASSET analysis
+        is 1-S.
     '''
     d, A, B = u.shape
 
@@ -1670,8 +1695,9 @@ def _pmat_neighbors(mat, filter_shape, nr_largest=None, diag=0):
     diag : int, optional
         which diagonal of mat[i, j] to align the kernel to in order to
         find its largest neighbors.
-        1: main diagonal (default)
-        0: anti-diagonal
+        * 0: main diagonal
+        * 1: anti-diagonal
+        Default: 0
 
     Returns
     -------
@@ -1759,18 +1785,15 @@ def joint_probability_matrix(
     pmat : ndarray
         a square matrix of cumulative probability values between alpha and 1.
         The values are assumed to be uniformly distibuted in the said range
-
     filter_shape : tuple
         a pair (l, w) of integers representing the kernel shape. The
-
     nr_largest : int, optional
         the number of largest neighbors to collect for each entry in mat
         If None (default) the filter length l is used
         Default: 0
-
-    alpha : float in [0, 1)
+    alpha : float in [0, 1), optional
         the left end of the range [alpha, 1]
-
+        Default: 0
     pvmin : flaot in [0, 1), optional
         minimum p-value for individual entries in pmat. Each pmat[i, j] is
         set to min(pmat[i, j], 1-pvmin) to avoid that a single highly
@@ -1807,40 +1830,7 @@ def joint_probability_matrix(
     n = l * (1 + 2 * w) - w * (w + 1)  # number of entries covered by kernel
     jpvmat = _jsf_uniform_orderstat_3d(pmat_neighb, alpha, n)
 
-    return 1 - jpvmat
-
-
-def surprise(p):
-    '''
-    Transform a p-value p (0 < p < 1; e.g. p=0.01) into the surprise
-    measure s given by:
-                    s = log10((1-p)/p)
-
-    s takes values between -\infty and +\infty
-
-    Arguments
-    ---------
-    p : float or ndarray of floats
-        float(s) between 0 and 1, representing cumulative probability(ies)
-
-    Output
-    ------
-    s : float or  ndarray of floats
-        the surprise transform of p (same type as p)
-
-    Examples
-    --------
-    >>> surprise(.05)
-    1.2787536009528289
-
-    >>> surprise(0.01)
-    1.9956351945975499
-
-    >>> surprise(.001)
-    2.9995654882259823
-
-    '''
-    return np.log10((1. - p) / p)
+    return 1. - jpvmat
 
 
 def extract_sse(spiketrains, x_edges, y_edges, cmat, ids=[]):

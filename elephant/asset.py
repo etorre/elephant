@@ -104,7 +104,7 @@ def _quantities_almost_equal(x, y):
     return np.all([-eps <= relative_diff, relative_diff <= eps], axis=0)
 
 
-def transactions(spiketrains, binsize, t_start=None, t_stop=None, ids=[]):
+def _transactions(spiketrains, binsize, t_start=None, t_stop=None, ids=[]):
     """
     Transform parallel spike trains a into list of sublists, called
     transactions, each corresponding to a time bin and containing the list
@@ -166,7 +166,7 @@ def transactions(spiketrains, binsize, t_start=None, t_stop=None, ids=[]):
     min_tstop = min(tstops)
 
     # Set starting time of binning
-    if t_start == None:
+    if t_start is None:
         start = _signals_same_tstart(trains)
     elif t_start < max_tstart:
         raise ValueError('Some SpikeTrains have a larger t_start ' +
@@ -359,9 +359,9 @@ def intersection_matrix(
 
     except MemoryError:  # use the memory-efficient version
         # Compute the list spiking neurons per bin, along both axes
-        ids_per_bin_x = transactions(
+        ids_per_bin_x = _transactions(
             sts_x, binsize, t_start=t_start_x, t_stop=t_stop_x)
-        ids_per_bin_y = transactions(
+        ids_per_bin_y = _transactions(
             sts_y, binsize, t_start=t_start_y, t_stop=t_stop_y)
 
         # Generate the intersection matrix
@@ -465,9 +465,9 @@ def intersection_matrix_sparse(
              for st in spiketrains]
 
     # Compute the list spiking neurons per bin, along both axes
-    ids_per_bin_x = transactions(
+    ids_per_bin_x = _transactions(
         sts_x, binsize, t_start=t_start_x, t_stop=t_stop_x)
-    ids_per_bin_y = transactions(
+    ids_per_bin_y = _transactions(
         sts_y, binsize, t_start=t_start_y, t_stop=t_stop_y)
 
     # Build the sparse intersection matrix, represented by the lists row,
@@ -636,7 +636,7 @@ def filter_matrix(
     return fmat
 
 
-def sample_quantile(sample, p):
+def _sample_quantiles(sample, p):
     '''
     Given a sample of values extracted from a probability distribution,
     estimates the quantile(s) associated to p-value(s) p.
@@ -675,7 +675,7 @@ def sample_quantile(sample, p):
     return quantiles
 
 
-def sample_pvalue(sample, x):
+def _sample_pvalue(sample, x):
     '''
     Estimates the p-value of each value in x, given a sample of values
     extracted from a probability distribution.
@@ -712,34 +712,6 @@ def sample_pvalue(sample, x):
 
     # Compute and return the p-values associated to the elements of x
     return np.array([(sample >= xx).sum() for xx in x]) * 1. / len(sample)
-
-
-def remove_diagonal(mat, diag):
-    '''
-    Removes the i-th diagonal from matrix mat and returns the remaining
-    elements (as a flattened array).
-
-    Parameters
-    ----------
-    mat : numpy.ndarray of shape (n, n)
-        a square matrix
-    diag : int or list
-        integer(s) between 1-n and n-1, where n is the matrix size,
-        each representing one diagonal index (0: main diagonal)
-
-    Returns
-    -------
-    arr : array of shape (m, )
-        flat array containing all elements of mat except for those in
-        diagonal diag.
-    '''
-    if isinstance(diag, int):
-        diag = [diag]
-
-    n = mat.shape[0]
-    diags_left = [i for i in xrange(1 - n, n) if i not in diag]
-
-    return np.hstack([mat.diagonal(i) for i in diags_left])
 
 
 def rnd_permute_except_diag(mat, i=None):
@@ -979,7 +951,7 @@ def fimat_quantiles_H0(
 
         filt_rnd_imat = filter_matrix(
             rnd_imat, l, w, diag=0, filt_type=filt_type, min_pv=min_pv)
-        q = np.array(sample_quantile(filt_rnd_imat, p))
+        q = np.array(_sample_quantiles(filt_rnd_imat, p))
         quants += q
         if return_pdf is True:
             if n == 0:
@@ -1882,12 +1854,12 @@ def extract_sse(spiketrains, x_edges, y_edges, cmat, ids=[]):
     # Compute the transactions associated to the two binnings
     binsize_x = x_edges[1] - x_edges[0]
     t_start_x, t_stop_x = x_edges[0], x_edges[-1]
-    tracts_x = transactions(
+    tracts_x = _transactions(
         spiketrains, binsize=binsize_x, t_start=t_start_x, t_stop=t_stop_x,
         ids=ids)
     binsize_y = y_edges[1] - y_edges[0]
     t_start_y, t_stop_y = y_edges[0], y_edges[-1]
-    tracts_y = transactions(
+    tracts_y = _transactions(
         spiketrains, binsize=binsize_y, t_start=t_start_y, t_stop=t_stop_y,
         ids=ids)
 

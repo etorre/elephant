@@ -1887,7 +1887,7 @@ def sse_difference(sse1, sse2, difference='linkwise'):
     return sse_new
 
 
-def remove_empty_events(sse):
+def _remove_empty_events(sse):
     '''
     Given a sequence of synchronous events (SSE) sse consisting of a pool of
     pixel positions and associated synchronous events (see below), returns a
@@ -1945,8 +1945,8 @@ def sse_isequal(sse1, sse2):
 
     '''
     # Remove empty links from sse11 and sse22, if any
-    sse11 = remove_empty_events(sse1)
-    sse22 = remove_empty_events(sse2)
+    sse11 = _remove_empty_events(sse1)
+    sse22 = _remove_empty_events(sse2)
 
     # Return whether sse11 == sse22
     return sse11 == sse22
@@ -1978,8 +1978,8 @@ def sse_isdisjoint(sse1, sse2):
 
     '''
     # Remove empty links from sse11 and sse22, if any
-    sse11 = remove_empty_events(sse1)
-    sse22 = remove_empty_events(sse2)
+    sse11 = _remove_empty_events(sse1)
+    sse22 = _remove_empty_events(sse2)
 
     # If both SSEs are empty, return False (we consider them equal)
     if sse11 == {} and sse22 == {}:
@@ -2022,8 +2022,8 @@ def sse_issub(sse1, sse2):
 
     '''
     # Remove empty links from sse11 and sse22, if any
-    sse11 = remove_empty_events(sse1)
-    sse22 = remove_empty_events(sse2)
+    sse11 = _remove_empty_events(sse1)
+    sse22 = _remove_empty_events(sse2)
 
     # Return False if sse11 and sse22 are disjoint
     if sse_isdisjoint(sse11, sse22):

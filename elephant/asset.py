@@ -21,6 +21,18 @@ from sklearn.cluster import dbscan as dbscan
 # =============================================================================
 
 
+
+def _xrange(x):
+    '''
+    Auxiliary function to use both in python 3 and python 2 to have a range
+    function as a generator.
+    '''
+    try:
+        return xrange(x)
+    except NameError:
+        return range(x)
+
+
 def _signals_same_tstart(signals):
     '''
     Check whether a list of signals (AnalogSignals or SpikeTrains) have same
@@ -83,6 +95,10 @@ def _quantities_almost_equal(x, y):
     '''
     Returns True if two quantities are almost equal, i.e. if x-y is
     "very close to 0" (not larger than machine precision for floats).
+
+    Note: not the same as numpy.testing.assert_allclose (which does not work
+    with Quantities) and numpy.testing.assert_almost_equal (which works only
+    with decimals)
 
     Parameters
     ----------
@@ -188,13 +204,12 @@ def _transactions(spiketrains, binsize, t_start=None, t_stop=None, ids=[]):
     binned = conv.BinnedSpikeTrain(
         trains, binsize=binsize, t_start=start, t_stop=stop)
     Nbins = binned.num_bins
-    # TODO: Maybe this is a bug and spike_indicies is not the same as 'filled',
-    # which was the original code from jelephant
+
     filled_bins = binned.spike_indices()
 
     # Compute and return the transaction list
     return [[train_id for train_id, b in zip(ids, filled_bins)
-            if bin_id in b] for bin_id in xrange(Nbins)]
+            if bin_id in b] for bin_id in _xrange(Nbins)]
 
 
 def _analog_signal_step_interp(signal, times):
@@ -330,7 +345,7 @@ def intersection_matrix(
         # Compute the intersection matrix imat
         N_bins = len(spikes_per_bin_x)
         imat = np.zeros((N_bins, N_bins)) * 1.
-        for ii in xrange(N_bins):
+        for ii in _xrange(N_bins):
             # Compute the ii-th row of imat
             bin_ii = bsts_x[:, ii].reshape(-1, 1)
             imat[ii, :] = (bin_ii * bsts_y).sum(axis=0)
@@ -355,7 +370,7 @@ def intersection_matrix(
             for y_id in ybins_equal_0:
                 imat[:, y_id] = 0
 
-            imat[xrange(N_bins), xrange(N_bins)] = 1.
+            imat[_xrange(N_bins), _xrange(N_bins)] = 1.
 
     except MemoryError:  # use the memory-efficient version
         # Compute the list spiking neurons per bin, along both axes
@@ -367,8 +382,8 @@ def intersection_matrix(
         # Generate the intersection matrix
         N_bins = len(ids_per_bin_x)
         imat = np.zeros((N_bins, N_bins))
-        for ii in xrange(N_bins):
-            for jj in xrange(N_bins):
+        for ii in _xrange(N_bins):
+            for jj in _xrange(N_bins):
                 if len(ids_per_bin_x[ii]) * len(ids_per_bin_y[jj]) != 0:
                     imat[ii, jj] = len(set(ids_per_bin_x[ii]).intersection(
                         set(ids_per_bin_y[jj])))
@@ -477,8 +492,8 @@ def intersection_matrix_sparse(
     row = []
     col = []
     data = []
-    for ii in xrange(N_bins):
-        for jj in xrange(N_bins):
+    for ii in _xrange(N_bins):
+        for jj in _xrange(N_bins):
             if len(ids_per_bin_x[ii]) * len(ids_per_bin_y[jj]) != 0:
                 row += [jj]
                 col += [ii]
@@ -741,7 +756,7 @@ def rnd_permute_except_diag(mat, i=None):
     # the start indices of each of them in the concatenated array
     diags_conc = np.array([])
     diag_edges = [0]
-    for j in xrange(1 - n, n):
+    for j in _xrange(1 - n, n):
         if j != i:
             diag = mat.diagonal(j)
             diags_conc = np.hstack([diags_conc, diag])
@@ -752,12 +767,12 @@ def rnd_permute_except_diag(mat, i=None):
 
     # Assign elements of the permuted vector to the random matrix
     edges_idx = 0
-    for j in xrange(1 - n, n):
+    for j in _xrange(1 - n, n):
         if j != i:
             j_if_g0 = j * (j >= 0)
             j_if_l0 = j * (j <= 0)
-            rows = xrange(-j_if_l0, n - j_if_g0)
-            cols = xrange(j_if_g0, n + j_if_l0)
+            rows = _xrange(-j_if_l0, n - j_if_g0)
+            cols = _xrange(j_if_g0, n + j_if_l0)
             mat_rnd[rows, cols] = diags_conc_rnd[
                 diag_edges[edges_idx]: diag_edges[edges_idx + 1]]
             edges_idx += 1
@@ -834,9 +849,9 @@ def _reference_diagonal(x_edges, y_edges):
     if diag_id is None:
         return diag_id, np.array([])
     elif diag_id >= 0:
-        elements = np.array([xrange(m - diag_id), xrange(diag_id, m)]).T
+        elements = np.array([_xrange(m - diag_id), _xrange(diag_id, m)]).T
     else:
-        elements = np.array([xrange(diag_id, m), xrange(m - diag_id)]).T
+        elements = np.array([_xrange(diag_id, m), _xrange(m - diag_id)]).T
 
     return diag_id, elements
 
@@ -925,9 +940,9 @@ def fimat_quantiles_H0(
         value_diag = 0              # set diagonal elements to 0
 
     if diag_id >= 0:
-        imat[xrange(m - diag_id), xrange(diag_id, m)] = value_diag
+        imat[_xrange(m - diag_id), _xrange(diag_id, m)] = value_diag
     else:
-        imat[xrange(diag_id, m), xrange(m - diag_id)] = value_diag
+        imat[_xrange(diag_id, m), _xrange(m - diag_id)] = value_diag
 
     # Initialise the quantiles to zero
     quants = 0 if not hasattr(p, '__len__') else np.zeros((1, len(p)))
@@ -937,7 +952,7 @@ def fimat_quantiles_H0(
     if verbose:
         print 'fimat_quantiles_H0(): begin bootstrap'
 
-    for n in xrange(n_surr):
+    for n in _xrange(n_surr):
         if verbose:
             print '    surr %d' % n
 
@@ -1059,7 +1074,7 @@ def _stretched_metric_2d(x, y, stretch, ref_angle):
     # Compute the matrix Theta of angles between each pair of points
     Theta = np.arctan(AngCoeff)
     n = Theta.shape[0]
-    Theta[xrange(n), xrange(n)] = 0  # set angle to 0 if points identical
+    Theta[_xrange(n), _xrange(n)] = 0  # set angle to 0 if points identical
 
     # Compute the matrix of stretching factors for each pair of points
     stretch_mat = (1 + ((stretch - 1.) * np.abs(np.sin(alpha - Theta))))
@@ -1227,7 +1242,7 @@ def pmat_montecarlo(
     pmat = np.array(np.zeros(imat.shape), dtype=int)
     if verbose:
         print 'pmat_bootstrap(): begin of bootstrap...'
-    for i in xrange(n_surr):                      # For each surrogate id i
+    for i in _xrange(n_surr):                      # For each surrogate id i
         if verbose:
             print '    surr %d' % i
         surrs_i = [st[i] for st in surrs]         # Take each i-th surrogate
@@ -1343,7 +1358,7 @@ def pmat_analytical_poisson(
         # to absence of spikes beyond the borders. Replace the first and last
         # (k//2) elements with the (k//2)-th / (n-k//2)-th ones, respectively
         k2 = k // 2
-        for i in xrange(fir_rate_x.shape[0]):
+        for i in _xrange(fir_rate_x.shape[0]):
             fir_rate_x[i, :k2] = fir_rate_x[i, k2]
             fir_rate_x[i, -k2:] = fir_rate_x[i, -k2 - 1]
             fir_rate_y[i, :k2] = fir_rate_y[i, k2]
@@ -1428,8 +1443,8 @@ def pmat_analytical_poisson(
         t_start_y=t_start_y)
 
     pmat = np.zeros(imat.shape)
-    for i in xrange(imat.shape[0]):
-        for j in xrange(imat.shape[1]):
+    for i in _xrange(imat.shape[0]):
+        for j in _xrange(imat.shape[1]):
             pmat[i, j] = scipy.stats.poisson.cdf(imat[i, j] - 1, Mu[i, j])
 
     # Substitute 0.5 to the elements along the main diagonal
@@ -1483,7 +1498,7 @@ def _jsf_uniform_orderstat_3d(u, alpha, n):
 
     # Define ranges [1,...,n], [2,...,n], ..., [d,...,n] for the mute variables
     # used to compute the integral as a sum over several possibilities
-    lists = [xrange(j, n + 1) for j in xrange(d, 0, -1)]
+    lists = [_xrange(j, n + 1) for j in _xrange(d, 0, -1)]
 
     # Compute the log of the integral's coefficient
     logK = np.sum(np.log(np.arange(1, n + 1))) - n * np.log(1 - alpha)
@@ -1759,7 +1774,7 @@ def extract_sse(spiketrains, x_edges, y_edges, cmat, ids=[]):
 
     # Reconstruct each worm, link by link
     sse_dict = {}
-    for k in xrange(1, nr_worms + 1):  # for each worm
+    for k in _xrange(1, nr_worms + 1):  # for each worm
         worm_k = {}  # worm k is a list of links (each link will be 1 sublist)
         pos_worm_k = np.array(np.where(cmat == k)).T  # position of all links
         # if no link lies on the reference diagonal

@@ -186,7 +186,7 @@ def _transactions(spiketrains, binsize, t_start=None, t_stop=None, ids=[]):
         start = _signals_same_tstart(trains)
     elif t_start < max_tstart:
         raise ValueError('Some SpikeTrains have a larger t_start ' +
-            'than the specified t_start value')
+                         'than the specified t_start value')
     else:
         start = t_start
 
@@ -244,6 +244,85 @@ def _analog_signal_step_interp(signal, times):
 
     # TODO: return as an IrregularlySampledSignal?
     return(signal.magnitude[time_ids] * signal.units).rescale(signal.units)
+
+
+def _sample_quantiles(sample, p):
+    '''
+    Given a sample of values extracted from a probability distribution,
+    estimates the quantile(s) associated to p-value(s) p.
+
+    Given a r.v. X with probability distribution P defined over a domain D,
+    the quantile x associated to the p-value p (0 <= p <= 1) is defined by:
+                q(p) = min{x \in D: P(X>=x) < p}
+    Given a sample S = {x1, x2, ..., xn} of n realisations of X, an estimate
+    of q(p) is given by:
+            q = min{x \in S: (#{y \in S: y>=x} / #{sample}) < p}
+
+    For instance, if p = 0.05, calculates the lowest value q in sample such
+    that less than 5% other values in sample are higher than q.
+
+    Parameters
+    ----------
+    sample : ndarray
+        an array of sample values, which are pooled to estimate the quantile(s)
+    p : float or list or floats or array, all in the range [0, 1]
+        p-value(s) for which to compute the quantile(s)
+
+    Returns
+    -------
+    q : float, or array of floats
+        quantile(s) associated to the input p-value(s).
+    '''
+    # Compute the cumulative probabilities associated to the p-values
+    if not isinstance(p, np.ndarray):
+        p = np.array([p])
+    probs = list((1 - p) * 100.)
+
+    quantiles = np.percentile(sample.flatten(), probs)
+    if hasattr(quantiles, '__len__'):
+        quantiles = np.array(quantiles)
+
+    return quantiles
+
+
+def _sample_pvalue(sample, x):
+    '''
+    Estimates the p-value of each value in x, given a sample of values
+    extracted from a probability distribution.
+
+    Given a r.v. X with probability distribution P, the p-value of X at
+    the point x is defined as:
+                    pv(x) := P(X >= x) = 1 - cdf(x)
+    The smaller pv(x), the less likely that x was extracted from the same
+    probability distribution of X.
+    Given a sample {x1, x2, ..., xn} of n realisations of X, an estimate of
+    pv(x) is given by:
+                    pv(x) ~ #{i: xi > x} / n
+
+    Parameters
+    ----------
+    sample : ndarray
+        a sample of realisations from a probability distribution
+    x : float or list or floats or array
+        p-value(s) for which to compute the quantiles
+
+    Returns
+    -------
+    pv : same type and shape as x
+        p-values associated to the input values x.
+    '''
+    # Convert x to an array
+    if not isinstance(x, np.ndarray):
+        x = np.array([x])
+
+    # Convert sample to a flattened array
+    if not isinstance(sample, np.ndarray):
+        sample = np.array([sample])
+    sample = sample.flatten()
+
+    # Compute and return the p-values associated to the elements of x
+    return np.array([(sample >= xx).sum() for xx in x]) * 1. / len(sample)
+
 
 # =============================================================================
 # HERE ASSET STARTS
@@ -651,85 +730,7 @@ def filter_matrix(
     return fmat
 
 
-def _sample_quantiles(sample, p):
-    '''
-    Given a sample of values extracted from a probability distribution,
-    estimates the quantile(s) associated to p-value(s) p.
-
-    Given a r.v. X with probability distribution P defined over a domain D,
-    the quantile x associated to the p-value p (0 <= p <= 1) is defined by:
-                q(p) = min{x \in D: P(X>=x) < p}
-    Given a sample S = {x1, x2, ..., xn} of n realisations of X, an estimate
-    of q(p) is given by:
-            q = min{x \in S: (#{y \in S: y>=x} / #{sample}) < p}
-
-    For instance, if p = 0.05, calculates the lowest value q in sample such
-    that less than 5% other values in sample are higher than q.
-
-    Parameters
-    ----------
-    sample : ndarray
-        an array of sample values, which are pooled to estimate the quantile(s)
-    p : float or list or floats or array, all in the range [0, 1]
-        p-value(s) for which to compute the quantile(s)
-
-    Returns
-    -------
-    q : float, or array of floats
-        quantile(s) associated to the input p-value(s).
-    '''
-    # Compute the cumulative probabilities associated to the p-values
-    if not isinstance(p, np.ndarray):
-        p = np.array([p])
-    probs = list((1 - p) * 100.)
-
-    quantiles = np.percentile(sample.flatten(), probs)
-    if hasattr(quantiles, '__len__'):
-        quantiles = np.array(quantiles)
-
-    return quantiles
-
-
-def _sample_pvalue(sample, x):
-    '''
-    Estimates the p-value of each value in x, given a sample of values
-    extracted from a probability distribution.
-
-    Given a r.v. X with probability distribution P, the p-value of X at
-    the point x is defined as:
-                    pv(x) := P(X >= x) = 1 - cdf(x)
-    The smaller pv(x), the less likely that x was extracted from the same
-    probability distribution of X.
-    Given a sample {x1, x2, ..., xn} of n realisations of X, an estimate of
-    pv(x) is given by:
-                    pv(x) ~ #{i: xi > x} / n
-
-    Parameters
-    ----------
-    sample : ndarray
-        a sample of realisations from a probability distribution
-    x : float or list or floats or array
-        p-value(s) for which to compute the quantiles
-
-    Returns
-    -------
-    pv : same type and shape as x
-        p-values associated to the input values x.
-    '''
-    # Convert x to an array
-    if not isinstance(x, np.ndarray):
-        x = np.array([x])
-
-    # Convert sample to a flattened array
-    if not isinstance(sample, np.ndarray):
-        sample = np.array([sample])
-    sample = sample.flatten()
-
-    # Compute and return the p-values associated to the elements of x
-    return np.array([(sample >= xx).sum() for xx in x]) * 1. / len(sample)
-
-
-def rnd_permute_except_diag(mat, i=None):
+def _rnd_permute_except_diag(mat, i=None):
     '''
     Randomly permutes all elements of a square matrix, except a given
     diagonal (one of the diagonals parallel to the main diagonal).
@@ -781,9 +782,9 @@ def rnd_permute_except_diag(mat, i=None):
     return mat_rnd
 
 
-def rnd_permute_symmetrically(mat):
+def _rnd_permute_symmetrically(mat):
     '''
-    randomly shuffles the rows and columns of a square matrix in the same way.
+    Randomly shuffles the rows and columns of a square matrix in the same way.
     Each i-th row/column in mat becomes the i'-th row/column.
     Returns the randomly shuffled matrix and the list of new indices where
     indices {0,1,...n} have been mapped to.
@@ -860,10 +861,10 @@ def fimat_quantiles_H0(
         imat, x_edges, y_edges, l, w, p=0.01, n_surr=100, rnd_type='full',
         filt_type='mean', min_pv=1e-5, return_pdf=False, verbose=False):
     '''
-    Given a square intersection matrix imat, filters it along the 45 degree
+    Given a square intersection matrix `imat`, filters it along the 45 degree
     direction with a rectangular filter and computes the significance
-    threshold for the intensity of its entries under the null hypohesis H0
-    that imat contains no diagonal structures.
+    threshold for the value of its entries under the null hypohesis H0
+    that `imat` contains no diagonal structures.
 
     The null hypothesis is implemented by bootstrap on surrogate matrices.
     Each surrogate matrix is obtained from imat by random permutation of its
@@ -947,8 +948,7 @@ def fimat_quantiles_H0(
     # Initialise the quantiles to zero
     quants = 0 if not hasattr(p, '__len__') else np.zeros((1, len(p)))
 
-    # Generate spike_train_surrogates by matrix permutation, and compute
-    # quantiles
+    # Generate surrogates by matrix permutation, and compute quantiles
     if verbose:
         print 'fimat_quantiles_H0(): begin bootstrap'
 
@@ -957,9 +957,9 @@ def fimat_quantiles_H0(
             print '    surr %d' % n
 
         if rnd_type == 'full':
-            rnd_imat = rnd_permute_except_diag(imat, i=diag_id)
+            rnd_imat = _rnd_permute_except_diag(imat, i=diag_id)
         elif rnd_type == 'symm':
-            rnd_imat, ids_new = rnd_permute_symmetrically(imat)
+            rnd_imat, ids_new = _rnd_permute_symmetrically(imat)
         else:
             raise ValueError(
                 "rnd_type (=%s) can either be 'full' or 'symm'" % rnd_type)
@@ -1165,7 +1165,7 @@ def cluster(mat, eps=10, min=2, stretch=5):
     return cluster_mat
 
 
-def pmat_montecarlo(
+def probability_matrix_montecarlo(
         spiketrains, binsize, dt, t_start_x=None, t_start_y=None,
         surr_method='train_shifting', j=None, n_surr=100, verbose=False):
     '''
@@ -1257,7 +1257,7 @@ def pmat_montecarlo(
     return pmat, x_edges, y_edges
 
 
-def pmat_analytical_poisson(
+def probability_matrix_analytical(
         spiketrains, binsize, dt, t_start_x=None, t_start_y=None,
         fir_rates='estimate', kernel_width=100 * pq.ms, verbose=False):
     '''
@@ -1692,7 +1692,7 @@ def joint_probability_matrix(
     >>> T = 1 * pq.s
     >>> binsize = 5 * pq.ms
     >>> imat, xx, yy = worms.intersection_matrix(sts, binsize=binsize, dt=T)
-    >>> pmat = worms.pmat_analytical_poisson(sts, binsize, dt=T)
+    >>> pmat = worms.probability_matrix_analytical(sts, binsize, dt=T)
     >>> jmat = joint_probability_matrix(
             pmat, filter_shape=(fl, fw), alpha=0, pvmin=1e-5)
 
@@ -1733,7 +1733,7 @@ def extract_sse(spiketrains, x_edges, y_edges, cmat, ids=[]):
         representing the cluster matrix in worms analysis (see: cluster())
     ids : list, optional
         a list of spike train identities. If provided, ids[i] is the identity
-        of spiketrains[i]. If empty, the default ids 0,1,...,n are used
+        of spiketrains[i]. If [], the default IDs 0,1,...,n are used
         Default: []
 
     Output:

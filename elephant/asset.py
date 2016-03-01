@@ -120,7 +120,7 @@ def _quantities_almost_equal(x, y):
     return np.all([-eps <= relative_diff, relative_diff <= eps], axis=0)
 
 
-def _transactions(spiketrains, binsize, t_start=None, t_stop=None, ids=[]):
+def _transactions(spiketrains, binsize, t_start=None, t_stop=None, ids=None):
     """
     Transform parallel spike trains a into list of sublists, called
     transactions, each corresponding to a time bin and containing the list
@@ -131,9 +131,6 @@ def _transactions(spiketrains, binsize, t_start=None, t_stop=None, ids=[]):
     in the same bin are counted as one event). The list of spike ids within
     each bin form the corresponding transaction.
 
-    NOTE: the fpgrowth function in the fim module by Christian Borgelt
-    requires int or string type for the SpikeTrain ids.
-
     Parameters
     ----------
     spiketrains: list of neo.SpikeTrains
@@ -141,17 +138,22 @@ def _transactions(spiketrains, binsize, t_start=None, t_stop=None, ids=[]):
         (Train_ID, SpikeTrain), where Train_ID can be any hashable object
     binsize: quantities.Quantity
         width of each time bin; time is binned to determine synchrony
-        t_start [quantity.Quantity. Default: None]
+    t_start: quantity.Quantity, optional
         starting time; only spikes occurring at times t >= t_start are
-        considered; the first transaction contains spike falling into the
+        considered; the first transaction contains spikes falling into the
         time segment [t_start, t_start+binsize[.
         If None, takes the t_start value of the spike trains in spiketrains
         if the same for all of them, or returns an error.
+        Default: None
     t_stop: quantities.Quantity, optional
         ending time; only spikes occurring at times t < t_stop are
         considered.
         If None, takes the t_stop value of the spike trains in spiketrains
         if the same for all of them, or returns an error.
+        Default: None
+    ids : list or None, optional
+        list of spike train IDs. If None, IDs 0 to N-1 are used, where N
+        is the number of input spike trains
         Default: None
 
     Returns
@@ -161,8 +163,8 @@ def _transactions(spiketrains, binsize, t_start=None, t_stop=None, ids=[]):
         and represents the list of spike trains ids having a spike in that
         time bin.
 
-
     """
+
     # Define the spike trains and their IDs depending on the input arguments
     if all([hasattr(elem, '__iter__') and len(elem) == 2 and
             type(elem[1]) == neo.SpikeTrain for elem in spiketrains]):
@@ -170,12 +172,14 @@ def _transactions(spiketrains, binsize, t_start=None, t_stop=None, ids=[]):
         trains = [elem[1] for elem in spiketrains]
     elif all([type(st) == neo.SpikeTrain for st in spiketrains]):
         trains = spiketrains
-        ids = range(len(spiketrains)) if ids == [] else ids
+        if ids is None:
+            ids = range(len(spiketrains))
     else:
         raise TypeError('spiketrains must be either a list of ' +
                         'SpikeTrains or a list of (id, SpikeTrain) pairs')
 
     # Take the minimum and maximum t_start and t_stop of all spike trains
+    # TODO: the block below should be ageneral routine in elephant
     tstarts = [xx.t_start for xx in trains]
     tstops = [xx.t_stop for xx in trains]
     max_tstart = max(tstarts)
@@ -242,8 +246,7 @@ def _analog_signal_step_interp(signal, times):
         ((times - signal.t_start) / dt).rescale(pq.dimensionless).magnitude
     ).astype('i')
 
-    # TODO: return as an IrregularlySampledSignal?
-    return(signal.magnitude[time_ids] * signal.units).rescale(signal.units)
+    return (signal.magnitude[time_ids] * signal.units).rescale(signal.units)
 
 
 def _sample_quantiles(sample, p):

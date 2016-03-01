@@ -1912,9 +1912,9 @@ def extract_sse(spiketrains, x_edges, y_edges, cmat, ids=[]):
 
 def sse_intersection(sse1, sse2, intersection='linkwise'):
     '''
-    Given two sequences of synchronous events (SSEs) sse1 and sse2, each
-    consisting of a pool of pixel positions (iK, jK) and associated
-    synchronous events SK, finds the intersection among them.
+    Given two sequences of synchronous events (SSEs) `sse1` and `sse2`, each
+    consisting of a pool of positions (iK, jK) of matrix entries and
+    associated synchronous events SK, finds the intersection among them.
     The intersection can be performed 'pixelwise' or 'linkwise'.
     * if 'pixelwise', it yields a new SSE which retains only events in sse1
       whose pixel position matches a pixel position in sse2. This operation
@@ -1932,9 +1932,8 @@ def sse_intersection(sse1, sse2, intersection='linkwise'):
     Parameters
     ----------
     sse1, sse2 : each a dictionary
-        a dictionary of pixel positions (i, j) as keys, and sets S of
+        each is a dictionary of pixel positions (i, j) as keys, and sets S of
         synchronous events as values (see above).
-
     intersection : str, optional
         the type of intersection to perform among the two SSEs. Either
         'pixelwise' or 'linkwise' (see above).

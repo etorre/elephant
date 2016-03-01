@@ -13,9 +13,7 @@ import quantities as pq
 import neo
 import itertools
 import elephant.conversion as conv
-# import jelephant.core.conditions as conditions
 import elephant.spike_train_surrogates as spike_train_surrogates
-# import jelephant.core.stocmod as stocmod
 from sklearn.cluster import dbscan as dbscan
 
 # =============================================================================
@@ -28,17 +26,17 @@ def _signals_same_tstart(signals):
     Check whether a list of signals (AnalogSignals or SpikeTrains) have same
     attribute t_start. If so return that value. Otherwise raise a ValueError.
 
-    Parameters:
+    Parameters
     ----------
     signals : list
         a list of signals (e.g. AnalogSignals or SpikeTrains) having
-        attribute t_start
+        attribute `t_start`
 
-    Returns:
+    Returns
     -------
     t_start : Quantity
-        The common attribute t_start of the list of signals.
-        If the signals have a different t_start, a ValueError is raised.
+        The common attribute `t_start` of the list of signals.
+        Raises a `ValueError` if the signals have a different `t_start`.
     '''
 
     t_start = signals[0].t_start
@@ -57,13 +55,13 @@ def _signals_same_tstop(signals):
     Check whether a list of signals (AnalogSignals or SpikeTrains) have same
     attribute t_stop. If so return that value. Otherwise raise a ValueError.
 
-    Parameters:
+    Parameters
     ----------
     signals : list
         a list of signals (e.g. AnalogSignals or SpikeTrains) having
         attribute t_stop
 
-    Returns:
+    Returns
     -------
     t_stop : Quantity
         The common attribute t_stop of the list of signals.
@@ -86,8 +84,8 @@ def _quantities_almost_equal(x, y):
     Returns True if two quantities are almost equal, i.e. if x-y is
     "very close to 0" (not larger than machine precision for floats).
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     x : Quantity
         first Quantity to compare
     y : Quantity
@@ -95,8 +93,8 @@ def _quantities_almost_equal(x, y):
         necessarily the same shape. Any shapes of x and y for which x-y can
         be calculated are permitted
 
-    Returns:
-    --------
+    Returns
+    -------
     arr : ndarray of bool
         an array of bools, which is True at any position where x-y is almost
         zero
@@ -120,12 +118,12 @@ def transactions(spiketrains, binsize, t_start=None, t_stop=None, ids=[]):
     NOTE: the fpgrowth function in the fim module by Christian Borgelt
     requires int or string type for the SpikeTrain ids.
 
-    Parameters:
-    -----------
-    spiketrains [list]
+    Parameters
+    ----------
+    spiketrains: list of neo.SpikeTrains
         list of neo.core.SpikeTrain objects, or list of pairs
         (Train_ID, SpikeTrain), where Train_ID can be any hashable object
-    binsize [quantity.Quantity]
+    binsize: quantities.Quantity
         width of each time bin; time is binned to determine synchrony
         t_start [quantity.Quantity. Default: None]
         starting time; only spikes occurring at times t >= t_start are
@@ -133,14 +131,15 @@ def transactions(spiketrains, binsize, t_start=None, t_stop=None, ids=[]):
         time segment [t_start, t_start+binsize[.
         If None, takes the t_start value of the spike trains in spiketrains
         if the same for all of them, or returns an error.
-    t_stop [quantity.Quantity. Default: None]
+    t_stop: quantities.Quantity, optional
         ending time; only spikes occurring at times t < t_stop are
         considered.
         If None, takes the t_stop value of the spike trains in spiketrains
-        if the same for all of them, or returns an error
+        if the same for all of them, or returns an error.
+        Default: None
 
-    Returns:
-    --------
+    Returns
+    -------
     trans : list of lists
         a list of transactions; each transaction corresponds to a time bin
         and represents the list of spike trains ids having a spike in that
@@ -158,13 +157,13 @@ def transactions(spiketrains, binsize, t_start=None, t_stop=None, ids=[]):
         ids = range(len(spiketrains)) if ids == [] else ids
     else:
         raise TypeError('spiketrains must be either a list of ' +
-            'SpikeTrains or a list of (id, SpikeTrain) pairs')
+                        'SpikeTrains or a list of (id, SpikeTrain) pairs')
 
     # Take the minimum and maximum t_start and t_stop of all spike trains
     tstarts = [xx.t_start for xx in trains]
     tstops = [xx.t_stop for xx in trains]
-    max_tstart, min_tstart = max(tstarts), min(tstarts)
-    max_tstop, min_tstop = max(tstops), min(tstops)
+    max_tstart = max(tstarts)
+    min_tstop = min(tstops)
 
     # Set starting time of binning
     if t_start == None:
@@ -195,7 +194,7 @@ def transactions(spiketrains, binsize, t_start=None, t_stop=None, ids=[]):
 
     # Compute and return the transaction list
     return [[train_id for train_id, b in zip(ids, filled_bins)
-        if bin_id in b] for bin_id in xrange(Nbins)]
+            if bin_id in b] for bin_id in xrange(Nbins)]
 
 
 def _analog_signal_step_interp(signal, times):
@@ -209,17 +208,15 @@ def _analog_signal_step_interp(signal, times):
 
 
     Parameters
-    -----
-    times : Quantity vector(time)
+    ----------
+    times : quantities.Quantity (vector of time points)
         The time points for which the interpolation is computed
-
     signal : neo.core.AnalogSignal
         The analog signal containing the discretization of the function to
         interpolate
 
-
-    Output
-    -----
+    Returns
+    -------
     Quantity array representing the values of the interpolated signal at the
     times given by times
     '''
@@ -254,20 +251,20 @@ def intersection_matrix(
 
     Parameters
     ----------
-    spiketrains : list of SpikeTrain
+    spiketrains : list of neo.SpikeTrains
         list of SpikeTrains from which to compute the intersection matrix
-    binsize : Quantity
+    binsize : quantities.Quantity
         size of the time bins used to define synchronous spikes in the given
         SpikeTrains.
-    dt : Quantity
+    dt : quantities.Quantity
         time span for which to consider the given SpikeTrains
-    t_start_x : Quantity, optional
+    t_start_x : quantities.Quantity, optional
         time start of the binning for the first axis of the intersection
         matrix, respectively.
         If None (default) the attribute t_start of the SpikeTrains is used
         (if the same for all spike trains).
         Default: None
-    t_start_y : Quantity, optional
+    t_start_y : quantities.Quantity, optional
         time start of the binning for the second axis of the intersection
         matrix
     norm : int, optional
@@ -304,18 +301,18 @@ def intersection_matrix(
     t_stop_max = max(t_stop_x, t_stop_y)
     for i, st in enumerate(spiketrains):
         if not (st.t_stop > t_stop_max or
-        _quantities_almost_equal(st.t_stop, t_stop_max)):
+                _quantities_almost_equal(st.t_stop, t_stop_max)):
             msg = 'SpikeTrain %d is shorter than the required time ' % i + \
                 'span: t_stop (%s) < %s' % (st.t_stop, t_stop_max)
             raise ValueError(msg)
 
     # For both x and y axis, cut all SpikeTrains between t_start and t_stop
     sts_x = [st.time_slice(t_start=t_start_x, t_stop=t_stop_x)
-        for st in spiketrains]
+             for st in spiketrains]
     sts_y = [st.time_slice(t_start=t_start_y, t_stop=t_stop_y)
-        for st in spiketrains]
+             for st in spiketrains]
 
-    # Compute imat either by matrix multiplication (20x faster) or by
+    # Compute imat either by matrix multiplication (~20x faster) or by
     # nested for loops (more memory efficient)
     try:  # try the fast version
         # Compute the binned spike train matrices, along both time axes
@@ -410,7 +407,7 @@ def intersection_matrix_sparse(
     bins i and j. The matrix  entries can be normalized to values between 0
     and 1 via different normalisations (see below)
 
-    Parameters:
+    Parameters
     ----------
     spiketrains : list of SpikeTrain
         list of SpikeTrains from which to compute the intersection matrix
@@ -433,9 +430,9 @@ def intersection_matrix_sparse(
         2: sqrt(len(s_1) * len(s_2))
         3: len(union(s_i, s_j))
 
-    Returns:
-    --------
-    imat_sparse: array of floats
+    Returns
+    -------
+    imat_sparse: numpy.array of floats
         the intersection matrix of a list of spike trains, as a sparse matrix
         from module scipy.sparse
     x_edges : ndarray
@@ -463,9 +460,9 @@ def intersection_matrix_sparse(
 
     # For both x and y axis, cut all SpikeTrains between t_start and t_stop
     sts_x = [st.time_slice(t_start=t_start_x, t_stop=t_stop_x)
-        for st in spiketrains]
+             for st in spiketrains]
     sts_y = [st.time_slice(t_start=t_start_y, t_stop=t_stop_y)
-        for st in spiketrains]
+             for st in spiketrains]
 
     # Compute the list spiking neurons per bin, along both axes
     ids_per_bin_x = transactions(
@@ -499,8 +496,8 @@ def intersection_matrix_sparse(
                         set(ids_per_bin_y[jj]))))
                 data += [temp_data]
 
-    int_mat_sparse = scipy.sparse.coo_matrix((data, (row, col)),
-        shape=(N_bins, N_bins), dtype=np.float32).todense()
+    int_mat_sparse = scipy.sparse.coo_matrix(
+        (data, (row, col)), shape=(N_bins, N_bins), dtype=np.float32).todense()
 
     # Compute the time edges corresponding to the binning employed
     t_start_x_dl = t_start_x.rescale(binsize.units).magnitude
@@ -724,7 +721,7 @@ def remove_diagonal(mat, diag):
 
     Parameters
     ----------
-    mat : ndarray of shape (n, n)
+    mat : numpy.ndarray of shape (n, n)
         a square matrix
     diag : int or list
         integer(s) between 1-n and n-1, where n is the matrix size,
@@ -750,7 +747,7 @@ def rnd_permute_except_diag(mat, i=None):
     Randomly permutes all elements of a square matrix, except a given
     diagonal (one of the diagonals parallel to the main diagonal).
 
-    Parameters:
+    Parameters
     ----------
     mat : ndarray
         an array to be randomly permuted
@@ -760,8 +757,8 @@ def rnd_permute_except_diag(mat, i=None):
         the full matrix is randomly permuted and no diagonal is kept.
         Default: None
 
-    Returns:
-    --------
+    Returns
+    -------
     mat_rnd : the randomised version of the matrix, where all elements
         are randomly permuted except for those of the i-th off-diagonal
     '''
@@ -805,14 +802,14 @@ def rnd_permute_symmetrically(mat):
     indices {0,1,...n} have been mapped to.
     Note: if mat is symmetric, the output matrix retains the symmetry.
 
-    Arguments
-    ---------
-    mat: ndarray
+    Parameters
+    ----------
+    mat: numpy.ndarray
         a square matrix
 
     Returns
     -------
-    mat2 : ndarray
+    mat2 : numpy.ndarray
         a square matrix
     '''
 
@@ -828,20 +825,23 @@ def rnd_permute_symmetrically(mat):
 
 def _reference_diagonal(x_edges, y_edges):
     '''
-    Given two arrays of time bin edges x_edges = (X1, X2, Xk) and y_edges =
-    (Y1, Y2, Yk), considers the matrix M such that M_ij = (Xi, Yj) and finds
-    the "reference diagonal" of M, i.e. the diagonal of M whose elements are
-    of the type (a, a). Returns the index of such daigonal and its elements.
+    Given two arrays of time bin edges `x_edges = (X1, X2, ..., Xk)` and
+    `y_edges = (Y1, Y2, ..., Yk)`, considers the matrix `M` such that
+    `M_ij = (Xi, Yj)` and finds the reference diagonal of `M`, i.e. the
+    diagonal of `M` whose elements are of the type `(a, a)`.
+    Returns the index of such daigonal and its elements.
 
-    For example, if x_edges = (0, 1, 2, 3) ms and y_edges = (1, 2, 3, 4) ms,
+    For example, if `x_edges = (0, 1, 2, 3) ms` and `y_edges = (1, 2, 3, 4) ms`
     then the index of the reference diagonal is -1 (first off-diagonal below
     the main diagonal) and its elements are (-1, 0), (0, 1), (1, 2), (2, 3).
 
     '''
     diag_id = None
-    error_msg = 'the time axes (%s-%s and %s-%s)' % (x_edges[0], x_edges[-1],
-        y_edges[0], y_edges[-1]) + ' overlap but the overlapping bin edges' \
-        + ' are not aligned. Bad alignment of the time axes.'
+    error_msg = \
+        'the time axes (%s-%s and %s-%s)' % (
+            x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]) + \
+        ' overlap but the overlapping bin edges are not aligned' \
+        '. Bad alignment of the time axes.'
 
     if y_edges[0] > x_edges[0]:
         if y_edges[0] < x_edges[-1]:
@@ -896,18 +896,17 @@ def fimat_quantiles_H0(
 
     Parameters:
     -----------
-    imat : ndarray
+    imat : numpy.ndarray
         intersection matrix (square matrix)
     l : int
         length of the rectangular kernel used to filter imat
     w : int
         width of the rectangular kernel used to filter imat
-    p : float or list, otional
-        p-value (or list of p-values) for which to compute the significance
-        threshold(s).
+    p : float or list, optional
+        p-value(s) for which to compute the significance threshold(s).
         Default: 0.01
     n_surr : int, optional
-        number of spike_train_surrogates to generate for the bootstrap procedure
+        number of surrogates to generate for the bootstrap procedure
     rnd_type : str, optional
         type of matrix randomization. Can be either:
         * 'full': the whole matrix is randomly shuffled
@@ -931,8 +930,8 @@ def fimat_quantiles_H0(
         whether to print messages on the current status of the analysis
         Default: False
 
-    Returns:
-    --------
+    Returns
+    -------
     q : float or array
         the quantiles associated to the p-value(s) p.
     '''
@@ -1008,20 +1007,20 @@ def mask_imat(imat, fimat, thresh_fimat, thresh_imat):
     fimat > thresh_fimat and imat > thresh_imat
     (and zeros elsewhere).
 
-    Parameters:
-    -----------
-    imat : ndarray
+    Parameters
+    ----------
+    imat : numpy.ndarray
         intersection matrix (square matrix)
-    fimat : ndarray
+    fimat : numpy.ndarray
         filtered intersection matrix
     thresh_fimat : float
         first threshold, from spike_train_surrogates with permuted entries
     thresh_imat : float
         second threshold, from dithered spike trains
 
-    Returns:
-    --------
-    mimat : ndarray of floats
+    Returns
+    -------
+    mimat : numpy.ndarray of floats
         intersection matrix containing only the significant entries of imat.
         It has the same shape of imat.
     '''
@@ -1052,9 +1051,9 @@ def _stretched_metric_2d(x, y, stretch, ref_angle):
 
     Parameters
     ----------
-    x : ndarray
+    x : numpy.ndarray
         array of abscissa of all points among which to compute the distance
-    y : ndarray (same shape as x)
+    y : numpy.ndarray (same shape as x)
         array of ordinates of all points among which to compute the distance
     stretch : float
         maximum stretching factor, applied if the line connecting the points
@@ -1065,7 +1064,7 @@ def _stretched_metric_2d(x, y, stretch, ref_angle):
 
     Output
     ------
-    D : ndarray
+    D : numpy.ndarray
         square matrix of distances between all pairs of points. If x and y
         have shape (n, ) then D has shape (n, n).
     '''
@@ -1126,24 +1125,27 @@ def cluster(mat, eps=10, min=2, stretch=5):
     where \theta is the angle between the pixels and the 45deg direction.
     The stretching factor thus varies between 1 and stretch.
 
-    Parameters:
-    -----------
-    mat : ndarray
+    Parameters
+    ----------
+    mat : numpy.ndarray
         a matrix whose elements with positive values are to be clustered.
-    eps: float
+    eps: float >=0, optional
         the maximum distance for two elements in mat to be part of the same
         neighbourhood in the DBSCAN algorithm
-    min: int
-        the minimum number of elements to form a neighbourhood
-    stretch: float, > 1
+        Default: 10
+    min: int, optional
+        the minimum number of elements to form a neighbourhood.
+        Default: 2
+    stretch: float > 1, optional
         the stretching factor of the euclidean metric for elements aligned
         along the 135 degree direction (anti-diagonal). The actual stretching
         increases from 1 to stretch as the direction of the two elements
         moves from the 45 to the 135 degree direction.
+        Default: 5
 
-    Output:
+    Returns
     -------
-    cmat : ndarray of int
+    cmat : numpy.ndarray of integers
         a matrix with the same shape of mat, each of whose elements is either
         * a positive int (cluster id) if the element is part of a cluster
         * 0 if the corresponding element in mat was non-positive
@@ -1162,8 +1164,8 @@ def cluster(mat, eps=10, min=2, stretch=5):
         xpos_sgnf, ypos_sgnf, stretch=stretch, ref_angle=45)
 
     # Cluster positions of significant pixels via dbscan
-    core_samples, config = dbscan(D, eps=eps, min_samples=min,
-        metric='precomputed')
+    core_samples, config = dbscan(
+        D, eps=eps, min_samples=min, metric='precomputed')
 
     # Construct the clustered matrix, where each element has value
     # * i = 1 to k if it belongs to a cluster i,
@@ -1187,7 +1189,8 @@ def pmat_montecarlo(
     The method produces surrogate spike trains (using one of several methods
     at disposal, see below) and calculates their intersection matrix M.
     For each entry (i, j), the intersection cdf P[i, j] is then given by:
-        P[i, j] = #(spike_train_surrogates such that M[i, j] < I[i, j]) / #(spike_train_surrogates)
+        P[i, j] = #(spike_train_surrogates such that M[i, j] < I[i, j]) /
+                        #(spike_train_surrogates)
 
     If P[i, j] is large (close to 1), I[i, j] is statistically significant:
     the probability to observe an overlap equal to or larger then I[i, j]
@@ -1195,14 +1198,13 @@ def pmat_montecarlo(
 
     Parameters
     ----------
-    sts : list of SpikeTrains
-        list of spike trains for whose intersection matrix to compute the
-        p-values
-    binsize : Quantity
+    sts : list of neo.SpikeTrains
+        list of spike trains for which to compute the probability matrix
+    binsize : quantities.Quantity
         width of the time bins used to compute the probability matrix
-    dt : Quantity
+    dt : quantities.Quantity
         time span for which to consider the given SpikeTrains
-    t_start_x, t_start_y : Quantity, optional
+    t_start_x, t_start_y : quantities.Quantity, optional
         time start of the binning for the first and second axes of the
         intersection matrix, respectively.
         If None (default) the attribute t_start of the SpikeTrains is used
@@ -1216,7 +1218,7 @@ def pmat_montecarlo(
         * 'spike_time_rand': see spike_train_surrogates.spike_time_rand()
         * 'isi_shuffling': see spike_train_surrogates.isi_shuffling()
         Default: 'train_shifting'
-    j : Quantity, optional
+    j : quantities.Quantity, optional
         For methods shifting spike times randomly around their original time
         (spike dithering, train shifting) or replacing them randomly within a
         certain window (spike jittering), j represents the size of that

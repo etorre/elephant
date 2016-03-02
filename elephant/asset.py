@@ -326,6 +326,24 @@ def _sample_pvalue(sample, x):
     return np.array([(sample >= xx).sum() for xx in x]) * 1. / len(sample)
 
 
+def _time_slice(signal, t_start, t_stop):
+    '''
+    Get the time slice of an AnalogSignal between t_start and t_stop.
+    '''
+
+    # Check which elements of the signal are between t_start and t_stop.
+    # Retain those and the corresponding times
+    elements_to_keep = np.all(
+        [signal.times >= t_start, signal.times < t_stop], axis=0)
+    times = signal.times[elements_to_keep]
+
+    # Put the retained values and times into a new AnalogSignal
+    sliced_signal = neo.AnalogSignal(
+        signal[elements_to_keep].view(pq.Quantity), t_start=times[0],
+        sampling_period=signal.sampling_period)
+
+    return sliced_signal
+
 # =============================================================================
 # HERE ASSET STARTS
 # =============================================================================
@@ -404,9 +422,9 @@ def intersection_matrix(
             raise ValueError(msg)
 
     # For both x and y axis, cut all SpikeTrains between t_start and t_stop
-    sts_x = [st.time_slice(t_start=t_start_x, t_stop=t_stop_x)
+    sts_x = [st._time_slice(t_start=t_start_x, t_stop=t_stop_x)
              for st in spiketrains]
-    sts_y = [st.time_slice(t_start=t_start_y, t_stop=t_stop_y)
+    sts_y = [st._time_slice(t_start=t_start_y, t_stop=t_stop_y)
              for st in spiketrains]
 
     # Compute imat either by matrix multiplication (~20x faster) or by
@@ -556,9 +574,9 @@ def intersection_matrix_sparse(
                 'SpikeTrain %d is shorter than the required time span' % i)
 
     # For both x and y axis, cut all SpikeTrains between t_start and t_stop
-    sts_x = [st.time_slice(t_start=t_start_x, t_stop=t_stop_x)
+    sts_x = [st._time_slice(t_start=t_start_x, t_stop=t_stop_x)
              for st in spiketrains]
-    sts_y = [st.time_slice(t_start=t_start_y, t_stop=t_stop_y)
+    sts_y = [st._time_slice(t_start=t_start_y, t_stop=t_stop_y)
              for st in spiketrains]
 
     # Compute the list spiking neurons per bin, along both axes
@@ -1047,9 +1065,12 @@ def probability_matrix_montecarlo(
         spiketrains, binsize, dt, t_start_x=None, t_start_y=None,
         surr_method='train_shifting', j=None, n_surr=100, verbose=False):
     '''
-    Given a list of spike trains, estimate the cumulative probability of
-    each entry in their intersection matrix (see: intersection_matrix())
-    by a Monte-Carlo approach using surrogate data.
+    Given a list of parallel spike trains, estimate the cumulative probability
+     of each entry in their intersection matrix (see: intersection_matrix())
+    by a Monte Carlo approach using surrogate data.
+    Contrarily to the analytical version (see: probability_matrix_analytical())
+    the Monte Carlo one does not incorporate the assumptions of Poissonianity
+    in the null hypothesis.
 
     The method produces surrogate spike trains (using one of several methods
     at disposal, see below) and calculates their intersection matrix M.
@@ -1100,6 +1121,10 @@ def probability_matrix_montecarlo(
         estimated probability of having an overlap between bins i and j
         STRICTLY LOWER than the observed overlap, under the null hypothesis
         of independence of the input spike trains.
+
+    See also
+    --------
+    probability_matrix_analytical() for analytical derivation of the matrix
     '''
 
     # Compute the intersection matrix of the original data
@@ -1158,7 +1183,7 @@ def probability_matrix_analytical(
 
     Parameters
     ----------
-    sts : list of neo.SpikeTrains
+    spiketrains : list of neo.SpikeTrains
         list of spike trains for whose intersection matrix to compute the
         p-values
     binsize : quantities.Quantity
@@ -1171,7 +1196,7 @@ def probability_matrix_analytical(
         If None (default) the attribute t_start of the SpikeTrains is used
         (if the same for all spike trains).
         Default: None
-    fir_rates: list of neo.AnalogSignal, or string 'estimate'; optional
+    fir_rates: list of neo.AnalogSignals or 'estimate', optional
         if a list, fir_rate[i] is the firing rate of the spike train
         spiketrains[i]. If 'estimate', firing rates are estimated by simple
         boxcar kernel convolution, with specified kernel width (see below)
@@ -1220,7 +1245,6 @@ def probability_matrix_analytical(
     # If rates are to be estimated, create the rate profiles as Quantity
     # objects obtained by boxcar-kernel convolution
     if fir_rates == 'estimate':
-
         if verbose is True:
             print('compute rates by boxcar-kernel convolution...')
 
@@ -1261,24 +1285,9 @@ def probability_matrix_analytical(
             print('create time slices of the rates...')
 
         # Define the rate by time slices
-        def time_slice(s, t_start, t_stop):
-            '''
-            function to get the time slice of an AnalogSignal between t_start
-            and t_stop.
-
-            Maybe Paul had written one in elephant, but I couldn't find it
-            '''
-            elements_to_take = np.all(
-                [s.times >= t_start, s.times < t_stop], axis=0)
-            times = s.times[elements_to_take]
-            s_slice = neo.AnalogSignal(
-                s[elements_to_take].view(pq.Quantity), t_start=times[0],
-                sampling_period=s.sampling_period)
-            return s_slice
-
-        fir_rate_x = [time_slice(signal, bsts_x.t_start, bsts_x.t_stop)
+        fir_rate_x = [_time_slice(signal, bsts_x.t_start, bsts_x.t_stop)
                       for signal in fir_rates]
-        fir_rate_y = [time_slice(signal, bsts_y.t_start, bsts_y.t_stop)
+        fir_rate_y = [_time_slice(signal, bsts_y.t_start, bsts_y.t_stop)
                       for signal in fir_rates]
         # Interpolate in the time bins and convert to Quantities
         times_x = bsts_x.edges[:-1]

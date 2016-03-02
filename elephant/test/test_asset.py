@@ -131,11 +131,35 @@ class AssetTestCase(unittest.TestCase):
     def test_mask_matrix(self):
         mat1 = np.array([[0, 1], [1, 2]])
         mat2 = np.array([[2, 1], [1, 3]])
-
         mask_1_2 = asset.mask_matrices([mat1, mat2], [1, 2])
         mask_1_2_correct = np.array([[False, False], [False, True]])
         self.assertTrue(np.all(mask_1_2 == mask_1_2_correct))
         self.assertIsInstance(mask_1_2[0, 0], np.bool_)
+
+    def test_cluster_matrix_entries(self):
+        mat = np.array([[False, False, True, False],
+                        [False, True, False, False],
+                        [True, False, False, True],
+                        [False, False, True, False]])
+        clustered1 = asset.cluster_matrix_entries(
+            mat, eps=1.5, min=2, stretch=1)
+        clustered2 = asset.cluster_matrix_entries(
+            mat, eps=1.5, min=3, stretch=1)
+        clustered1_correctA = np.array([[0, 0, 1, 0],
+                                       [0, 1, 0, 0],
+                                       [1, 0, 0, 2],
+                                       [0, 0, 2, 0]])
+        clustered1_correctB = np.array([[0, 0, 2, 0],
+                                       [0, 2, 0, 0],
+                                       [2, 0, 0, 1],
+                                       [0, 0, 1, 0]])
+        clustered2_correct = np.array([[0, 0, 1, 0],
+                                       [0, 1, 0, 0],
+                                       [1, 0, 0, -1],
+                                       [0, 0, -1, 0]])
+        self.assertTrue(np.all(clustered1 == clustered1_correctA) or
+                        np.all(clustered1 == clustered1_correctB))
+        self.assertTrue(np.all(clustered2 == clustered2_correct))
 
 
 def suite():

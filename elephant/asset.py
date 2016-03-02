@@ -633,7 +633,7 @@ def filter_matrix(
     """
     Filters a matrix mat by convolving it with a rectangular kernel.
 
-    In Worms analysis, mat is the intersection matrix built by binning
+    In ASSET analysis, mat is the intersection matrix built by binning
     parallel spike trains and counting the overlap at any two time bins
     (see intersection_matrix(), intersection_matrix_sparse()).
 
@@ -913,7 +913,7 @@ def mask_matrices(matrices, thresholds):
     # (trick to find nans in masked: a number is nan if it's not >= - np.inf)
     mask[True - (mask >= -np.inf)] = False
 
-    return mask
+    return np.array(mask, dtype=bool)
 
 
 def _stretched_metric_2d(x, y, stretch, ref_angle):

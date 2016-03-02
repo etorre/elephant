@@ -12,7 +12,7 @@ import elephant.asset as asset
 
 
 stretchedmetric2d = asset._stretched_metric_2d
-cluster = asset.cluster
+cluster = asset.cluster_matrix_entries
 
 
 class AssetTestCase(unittest.TestCase):
@@ -127,6 +127,15 @@ class AssetTestCase(unittest.TestCase):
         self.assertFalse(asset.sse_issuper(a, b))
         self.assertTrue(asset.sse_overlap(a, b))
         self.assertFalse(asset.sse_overlap(c, d))
+
+    def test_mask_matrix(self):
+        mat1 = np.array([[0, 1], [1, 2]])
+        mat2 = np.array([[2, 1], [1, 3]])
+
+        mask_1_2 = asset.mask_matrices([mat1, mat2], [1, 2])
+        mask_1_2_correct = np.array([[False, False], [False, True]])
+        self.assertTrue(np.all(mask_1_2 == mask_1_2_correct))
+        self.assertIsInstance(mask_1_2[0, 0], np.bool_)
 
 
 def suite():

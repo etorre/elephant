@@ -1,7 +1,8 @@
 """
-Created on Sat Okt  15 19:41:06 2014
+Code for the ASSET analysis to find sequences of synchronous events
+("synfire chain acitivty") in parallel spike train data.
 
-@author: torre
+@author: Emiliano Torre [e.torre@fz-juelich.de]
 """
 
 import numpy as np
@@ -220,31 +221,29 @@ def _analog_signal_step_interp(signal, times):
     '''
     Compute the step-wise interpolation of a signal at desired times.
 
-    Given a signal (e.g. an AnalogSignal) AS taking value s0 and s1 at two
-    consecutive time points t0 and t1 (t0 < t1), the value s of the step-wise
-    interpolation at time t: t0 <= t < t1 is given by s=s0, for any time t
-    between AS.t_start and AS.t_stop.
-
+    Given a signal (e.g. an AnalogSignal) s taking value s(t0) and s(t1)
+    at two consecutive time points t0 and t1 (t0 < t1), the value of the
+    step-wise interpolation at time t: t0 <= t < t1 is given by s(t)=s(t0).
 
     Parameters
     ----------
-    times : quantities.Quantity (vector of time points)
-        The time points for which the interpolation is computed
-    signal : neo.core.AnalogSignal
+    signal : neo.AnalogSignal
         The analog signal containing the discretization of the function to
         interpolate
+    times : quantities.Quantity (vector of time points)
+        The time points at which the step interpolation is computed
 
     Returns
     -------
-    Quantity array representing the values of the interpolated signal at the
-    times given by times
+    quantities.Quantity object with same shape of `times`, and containing
+    the values of the interpolated signal at the time points in `times`
     '''
     dt = signal.sampling_period
 
     # Compute the ids of the signal times to the left of each time in times
     time_ids = np.floor(
-        ((times - signal.t_start) / dt).rescale(pq.dimensionless).magnitude
-    ).astype('i')
+        ((times - signal.t_start) / dt).rescale(
+            pq.dimensionless).magnitude).astype('i')
 
     return (signal.magnitude[time_ids] * signal.units).rescale(signal.units)
 
@@ -376,12 +375,13 @@ def intersection_matrix(
 
     Returns
     -------
-    imat : array of floats
-        the intersection matrix of a list of spike trains
-    x_edges : ndarray
+    imat : numpy.ndarray of floats
+        the intersection matrix of a list of spike trains. Has shape (n,n),
+        where n is the number of bins time was discretized in.
+    x_edges : numpy.ndarray
         edges of the bins used for the horizontal axis of imat. If imat is
         a matrix of shape (n, n), x_edges has length n+1
-    y_edges : ndarray
+    y_edges : numpy.ndarray
         edges of the bins used for the vertical axis of imat. If imat is
         a matrix of shape (n, n), y_edges has length n+1
     """
@@ -472,13 +472,13 @@ def intersection_matrix(
                     # Normalise according to the desired normalisation type:
                     if norm == 1:
                         imat[ii, jj] /= float(min(len(ids_per_bin_x[ii]),
-                            len(ids_per_bin_y[jj])))
+                                                  len(ids_per_bin_y[jj])))
                     if norm == 2:
                         imat[ii, jj] /= np.sqrt(float(
                             len(ids_per_bin_x[ii]) * len(ids_per_bin_y[jj])))
                     if norm == 3:
-                        imat[ii, jj] /= float(len(set(ids_per_bin_x[ii]
-                                                      ).union(set(ids_per_bin_y[jj]))))
+                        imat[ii, jj] /= float(len(set(
+                            ids_per_bin_x[ii]).union(set(ids_per_bin_y[jj]))))
 
     # Compute the time edges corresponding to the binning employed
     t_start_x_dl = t_start_x.rescale(binsize.units).magnitude
@@ -506,14 +506,14 @@ def intersection_matrix_sparse(
 
     Parameters
     ----------
-    spiketrains : list of SpikeTrain
+    spiketrains : list of neo.SpikeTrains
         list of SpikeTrains from which to compute the intersection matrix
-    binsize : Quantity
+    binsize : quantities.Quantity
         size of the time bins used to define synchronous spikes in the given
         SpikeTrains.
-    dt : Quantity
+    dt : quantities.Quantity
         time span for which to consider the given SpikeTrains
-    t_start_x, t_start_y : Quantity, optional
+    t_start_x, t_start_y : both quantities.Quantity, optional
         time start of the binning for the first and second axes of the
         intersection matrix, respectively.
         If None (default) the attribute t_start of the SpikeTrains is used
@@ -860,41 +860,42 @@ def _reference_diagonal(x_edges, y_edges):
     return diag_id, elements
 
 
-def mask_imat(imat, fimat, thresh_fimat, thresh_imat):
+def mask_matrices(matrices, thresholds):
     '''
-    Given an intersection matrix imat, its filtered version fimat, the
-    significance threshold thresh_fimat obtained from random permutations
-    of fimat, and the significance threshold thresh_imat obtained from
-    random dithering of the original spike trains, returns a masked
-    intersection matrix containing only significant elements of imat.
-    An element of imat is significant if, at that position,
-    fimat > thresh_fimat and imat > thresh_imat
-    (and zeros elsewhere).
+    Given a list of matrices and a list of thresholds, return a boolean matrix
+    B ("mask") such that B[i,j] is True if each input matrix in the list
+    strictly exceeds the corresponding threshold at that position.
 
     Parameters
     ----------
-    imat : numpy.ndarray
-        intersection matrix (square matrix)
-    fimat : numpy.ndarray
-        filtered intersection matrix
-    thresh_fimat : float
-        first threshold, from spike_train_surrogates with permuted entries
-    thresh_imat : float
-        second threshold, from dithered spike trains
+    matrices : list of numpy.ndarrays
+        the matrices which are compared to the respective thresholds to
+        build the mask. All matrices must have the same shape.
+    thresholds : list of floats
+        list of thresholds
 
     Returns
     -------
-    mimat : numpy.ndarray of floats
-        intersection matrix containing only the significant entries of imat.
-        It has the same shape of imat.
+    mask : numpy.ndarray of bools
+        mask matrix with same shape of the input matrices.
     '''
-    masked_imat = (imat > thresh_imat) * (fimat > thresh_fimat) * imat
+
+    # Check that input lists have same length
+    L = len(matrices)
+    if L != len(thresholds):
+        raise ValueError('`matrices` and `thresholds` must have same length')
+
+    # Compute mask matrix
+    mask = matrices[0] > thresholds[0]
+    if L > 1:
+        for (mat, thresh) in zip(matrices, thresholds):
+            mask = mask * (mat > thresh)
 
     # Replace nans, coming from False * np.inf, with 0s
     # (trick to find nans in masked: a number is nan if it's not >= - np.inf)
-    masked_imat[True - (masked_imat >= -np.inf)] = 0
+    mask[True - (mask >= -np.inf)] = False
 
-    return masked_imat
+    return mask
 
 
 def _stretched_metric_2d(x, y, stretch, ref_angle):
@@ -960,7 +961,7 @@ def _stretched_metric_2d(x, y, stretch, ref_angle):
     return D * stretch_mat
 
 
-def cluster(mat, eps=10, min=2, stretch=5):
+def cluster_matrix_entries(mat, eps=10, min=2, stretch=5):
     '''
     Given a matrix mat, replaces its positive elements with integers
     representing different cluster ids. Each cluster comprises close-by
@@ -993,14 +994,14 @@ def cluster(mat, eps=10, min=2, stretch=5):
     ----------
     mat : numpy.ndarray
         a matrix whose elements with positive values are to be clustered.
-    eps: float >=0, optional
+    eps : float >=0, optional
         the maximum distance for two elements in mat to be part of the same
         neighbourhood in the DBSCAN algorithm
         Default: 10
-    min: int, optional
+    min : int, optional
         the minimum number of elements to form a neighbourhood.
         Default: 2
-    stretch: float > 1, optional
+    stretch : float > 1, optional
         the stretching factor of the euclidean metric for elements aligned
         along the 135 degree direction (anti-diagonal). The actual stretching
         increases from 1 to stretch as the direction of the two elements
@@ -1227,11 +1228,11 @@ def probability_matrix_analytical(
         k = int((kernel_width / binsize).rescale(pq.dimensionless))
         kernel = np.ones(k) * 1. / k
         fir_rate_x = np.vstack([np.convolve(bst, kernel, mode='same')
-            for bst in bsts_x_matrix])
+                                for bst in bsts_x_matrix])
         fir_rate_y = np.vstack([np.convolve(bst, kernel, mode='same')
-            for bst in bsts_y_matrix])
+                                for bst in bsts_y_matrix])
 
-        # The convolution results in an array which decreases at the borders due
+        # The convolution results in an array decreasing at the borders due
         # to absence of spikes beyond the borders. Replace the first and last
         # (k//2) elements with the (k//2)-th / (n-k//2)-th ones, respectively
         k2 = k // 2
@@ -1501,8 +1502,8 @@ def _pmat_neighbors(mat, filter_shape, nr_largest=None, diag=0):
             # to the corresponding row in lmat
             largest_vals = np.sort(
                 row_patches * flattened_filt, axis=1)[:, -d:]
-            lmat[
-                :, y + (l // 2), (l // 2): (l // 2) + N_bin - l + 1] = largest_vals.T
+            lmat[:, y + (l // 2),
+                 (l // 2): (l // 2) + N_bin - l + 1] = largest_vals.T
 
     except MemoryError:  # if too large, do it serially by for loops
         for y in bin_range:  # one step to the right;
@@ -1528,15 +1529,8 @@ def joint_probability_matrix(
     falling within the kernel and computes their joint p-value jmat[i, j]
     (see [1]).
 
-    [1] Torre et al (in prep) ...
-
-    WARNING: jmat contains p-values and not cumulative probabilities
-    (contrary to pmat). Therefore, its values are significant is small
-    (close to 0) and not if large (close to 1)!!!
-    TODO: change in the future so that also pmat contains p-values
-
-    Arguments
-    ---------
+    Parameters
+    ----------
     pmat : ndarray
         a square matrix of cumulative probability values between alpha and 1.
         The values are assumed to be uniformly distibuted in the said range
@@ -1558,20 +1552,24 @@ def joint_probability_matrix(
 
     Returns
     -------
-    jmat : ndarray
+    jmat : numpy.ndarray
         joint probability matrix associated to pmat
 
-    Examples
-    --------
+
+    References
+    ----------
+    [1] Torre et al (in prep) ...
+
+    Example
+    -------
     # Assuming to have a list sts of parallel spike trains over 1s recording,
     # the following code computes the intersection/probability/joint-prob
     # matrices imat/pmat/jmat using a bin width of 5 ms
     >>> T = 1 * pq.s
     >>> binsize = 5 * pq.ms
-    >>> imat, xx, yy = worms.intersection_matrix(sts, binsize=binsize, dt=T)
-    >>> pmat = worms.probability_matrix_analytical(sts, binsize, dt=T)
-    >>> jmat = joint_probability_matrix(
-            pmat, filter_shape=(fl, fw), alpha=0, pvmin=1e-5)
+    >>> imat, xedges, yedges = intersection_matrix(sts, binsize=binsize, dt=T)
+    >>> pmat = probability_matrix_analytical(sts, binsize, dt=T)
+    >>> jmat = joint_probability_matrix(pmat, filter_shape=(fl, fw))
 
     '''
     # Find for each P_ij in the probability matrix its neighbors and maximize
@@ -1588,32 +1586,33 @@ def joint_probability_matrix(
     return 1. - jpvmat
 
 
-def extract_sse(spiketrains, x_edges, y_edges, cmat, ids=[]):
+def extract_sse(spiketrains, x_edges, y_edges, cmat, ids=None):
     '''
     Given a list of spike trains, two arrays of bin edges and a clustered
     intersection matrix obtained from those spike trains via worms analysis
     using the specified edges, extracts the sequences of synchronous events
     (SSEs) corresponding to clustered elements in the cluster matrix.
 
-    Parameters:
-    -----------
-    spiketrains : list of SpikeTrain
+    Parameters
+    ----------
+    spiketrains : list of neo.SpikeTrain
         the spike trains analyzed for repeated sequences of synchronous
         events.
-    x_edges : Quantity array
+    x_edges : quantities.Quantity
         the first array of time bins used to compute cmat
-    y_edges : Quantity array
+    y_edges : quantities.Quantity
         the second array of time bins used to compute cmat. Musr have the
         same length as x_array
-    cmat: ndarray
-        matrix of shape (n, n), where n is the length of x_edges and y_edges,
-        representing the cluster matrix in worms analysis (see: cluster())
-    ids : list, optional
-        a list of spike train identities. If provided, ids[i] is the identity
-        of spiketrains[i]. If [], the default IDs 0,1,...,n are used
-        Default: []
+    cmat: numpy.ndarray
+        matrix of shape (n, n), where n is the length of x_edges and
+        y_edges, representing the cluster matrix in worms analysis
+        (see: cluster_matrix_entries())
+    ids : list or None, optional
+        a list of spike train IDs. If provided, ids[i] is the identity
+        of spiketrains[i]. If None, the IDs 0,1,...,n-1 are used
+        Default: None
 
-    Output:
+    Returns
     -------
     sse : dict
         a dictionary D of SSEs, where each SSE is a sub-dictionary Dk,
@@ -1686,7 +1685,7 @@ def sse_intersection(sse1, sse2, intersection='linkwise'):
 
     Parameters
     ----------
-    sse1, sse2 : each a dictionary
+    sse1, sse2 : each a dict
         each is a dictionary of pixel positions (i, j) as keys, and sets S of
         synchronous events as values (see above).
     intersection : str, optional
@@ -1696,7 +1695,7 @@ def sse_intersection(sse1, sse2, intersection='linkwise'):
 
     Returns
     -------
-    sse : dictionary
+    sse : dict
         a new SSE (same structure as sse1 and sse2) which retains only the
         events of sse1 associated to keys present both in sse1 and sse2.
         If intersection = 'linkwise', such events are additionally
@@ -1746,7 +1745,7 @@ def sse_difference(sse1, sse2, difference='linkwise'):
 
     Parameters
     ----------
-    sse1, sse2 : each a dictionary
+    sse1, sse2 : each a dict
         a dictionary of pixel positions (i, j) as keys, and sets S of
         synchronous events as values (see above).
 
@@ -1757,10 +1756,9 @@ def sse_difference(sse1, sse2, difference='linkwise'):
 
     Returns
     -------
-    sse : dictionary
+    sse : dict
         a new SSE (same structure as sse1 and sse2) which retains the
         difference between sse1 and sse2 (see above).
-
     '''
     sse_new = sse1.copy()
     for pixel1 in sse_new.keys():
@@ -1826,14 +1824,14 @@ def sse_isequal(sse1, sse2):
 
     Parameters
     ----------
-    sse1, sse2 : each a dictionary
+    sse1, sse2 : each a dict
         a dictionary of pixel positions (i, j) as keys, and sets S of
         synchronous events as values (see above).
 
     Returns
     -------
-    is_sub : bool
-        returns True if sse1 is a subset of sse2
+    is_equal : bool
+        returns True if sse1 is identical to sse2
 
     '''
     # Remove empty links from sse11 and sse22, if any
@@ -1865,8 +1863,8 @@ def sse_isdisjoint(sse1, sse2):
 
     Returns
     -------
-    are_disjoint : bool
-        returns True if sse1 and sse2 are disjoint.
+    is_disjoint : bool
+        returns True if sse1 is disjoint from sse2.
 
     '''
     # Remove empty links from sse11 and sse22, if any
@@ -1903,7 +1901,7 @@ def sse_issub(sse1, sse2):
 
     Parameters
     ----------
-    sse1, sse2 : each a dictionary
+    sse1, sse2 : each a dict
         a dictionary of pixel positions (i, j) as keys, and sets S of
         synchronous events as values (see above).
 
@@ -1953,7 +1951,7 @@ def sse_issuper(sse1, sse2):
 
     Parameters
     ----------
-    sse1, sse2 : each a dictionary
+    sse1, sse2 : each a dict
         a dictionary of pixel positions (i, j) as keys, and sets S of
         synchronous events as values (see above).
 
@@ -1984,7 +1982,7 @@ def sse_overlap(sse1, sse2):
 
     Parameters
     ----------
-    sse1, sse2 : each a dictionary
+    sse1, sse2 : each a dict
         a dictionary of pixel positions (i, j) as keys, and sets S of
         synchronous events as values (see above).
 
@@ -2000,37 +1998,33 @@ def sse_overlap(sse1, sse2):
 
 __doc__ = \
     ' \
-WORMS is a statistical method for the detection of repeating sequences of \n \
-synchronous spiking events in parallel spike trains. \n\n\
-Given a list sts of SpikeTrains, the analysis comprises the following \
+ASSET is a statistical method [1] for the detection of repeating sequences \n \
+of synchronous spiking events in parallel spike trains. \n\n\
+Given a list `sts` of spike trains, the analysis comprises the following \
 steps: \n \
-1) compute the intersection matrix with the desired bin size  \n \
+1) Build the intersection matrix `imat` (optional) and the associated \n \
+   probability matrix `pmat` with the desired bin size:  \n \
    >>> binsize = 5 * pq.ms  \n \
    >>> dt = 1 * pq.s  \n \
-   >>> imat, x_edges, y_edges = intersection_matrix(  \n \
-           sts, binsize=binsize, dt=dt, norm=2)  \n \
-1b) or build imat as a probability matrix, computed e.g. via bootstrap  \
-   >>> binsize = 5 * pq.ms  \n \
-   >>> dt = 1 * pq.s  \n \
-   >>> j = 20 * pq.ms \n\
-   >>> n_surr = 100 \n\
-   >>> imat, x_edges, y_edges = pmat_bootstrap(  \n \
-           sts, binsize=binsize, dt=dt, j=j, n_surr=n_surr)  \n \
-2) filter the matrix with a rectangular filter of desired bin length  \n \
-   >>> fl = 5  # filter length  \n \
-   >>> fw = 2  # filter width  \n \
-   >>> imat_filt = filter_matrix(imat, l=fl, w=fw)  \n \
-3) compute the significance threshold for entries in the filtered matrix  \n\
-   >>> alpha = 0.05  \n\
-   >>>n_surr2 = 100 \n\
-   >>> q = fimat_quantiles_H0(\n\
-           imat, x_edges, y_edges, l=l, w=w, p=alpha, n_surr=n_surr2)  \n\
-4) create a masked (thresholded) version of imat  \n\
-   >>> imat_masked = mask_imat(imat, fimat, thresh_fimat=q,  \n\
-           thresh_imat=1-alpha)  \n \
-5) cluster significant elements of imat into diagonal structures ("worms")\n\
-   >>> cmat = worms.cluster(nimat_masked, eps=eps, min=minsize, \n\
-           stretch=stretch) \n\
-6) extract sequences of synchronous events associated to each worm \n\
-   >>> extract_sse(sts, x_edges, y_edges, cmat) \n\
+   >>> imat, xedges, yedges = intersection_matrix(sts, binsize, dt, norm=2)\n \
+   >>> pmat, xedges, yedges = probability_matrix_analytical(sts, binsize, dt) \
+   \n \
+2) Compute the joint probability matrix jmat, using a suitable filter:  \n \
+   >>> filter_shape = (5,2)  # filter shape  \n \
+   >>> nr_neigh = 5  # nr of largest neighbors \n \
+   >>> jmat = joint_probability_matrix(pmat, filter_shape, nr_neigh)  \n \
+3) Create from pmat and jmat a masked version of the intersection matrix: \n \
+   >>> alpha1 = 0.99 \n \
+   >>> alpha2 = 0.99999 \n \
+   >>> mask = mask_matrices([pmat, jmat], [alpha1, alpha2]) \n \
+4) Cluster significant elements of imat into diagonal structures ("DSs"): \n\
+   >>> epsilon = 10 \n \
+   >>> minsize = 2 \n \
+   >>> stretch = 5 \n \
+   >>> cmat = worms.cluster_matrix_entries(mask, epsilon, minsize, stretch) \n\
+5) Extract sequences of synchronous events associated to each worm \n\
+   >>> extract_sse(sts, x_edges, y_edges, cmat) \n\n\n\
+References\n\
+----------\n\
+[1] Torre, Canova, Denker, Gerstein, Helias, Gruen (submitted) ...\n\
 '

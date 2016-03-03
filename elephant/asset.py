@@ -385,10 +385,10 @@ def intersection_matrix(
         type of normalization to be applied to each entry [i,j] of the
         intersection matrix. Given the sets s_i, s_j of neuron ids in the
         bins i, j respectively, the normalisation coefficient can be:
-        norm = 0 or None: no normalisation (row counts)
-        norm = 1: $$ len(\\cap(s_i, s_j))$$
-        norm = 2: sqrt(len(s_1) * len(s_2))
-        norm = 3: len(union(s_i, s_j))
+        * norm = 0 or None: no normalisation (row counts)
+        * norm = 1: .math $$ len(\\cap(s_i, s_j))$$
+        * norm = 2: sqrt(len(s_1) * len(s_2))
+        * norm = 3: len(union(s_i, s_j))
         Default: None
 
     Returns

@@ -386,7 +386,7 @@ def intersection_matrix(
         intersection matrix. Given the sets s_i, s_j of neuron ids in the
         bins i, j respectively, the normalisation coefficient can be:
         * norm = 0 or None: no normalisation (row counts)
-        * norm = 1: .math $$ len(\\cap(s_i, s_j))$$
+        * norm = 1: len(intersection(s_i, s_j))
         * norm = 2: sqrt(len(s_1) * len(s_2))
         * norm = 3: len(union(s_i, s_j))
         Default: None
@@ -491,10 +491,10 @@ def intersection_matrix(
                     if norm == 1:
                         imat[ii, jj] /= float(min(len(ids_per_bin_x[ii]),
                                                   len(ids_per_bin_y[jj])))
-                    if norm == 2:
+                    elif norm == 2:
                         imat[ii, jj] /= np.sqrt(float(
                             len(ids_per_bin_x[ii]) * len(ids_per_bin_y[jj])))
-                    if norm == 3:
+                    elif norm == 3:
                         imat[ii, jj] /= float(len(set(
                             ids_per_bin_x[ii]).union(set(ids_per_bin_y[jj]))))
 
@@ -509,122 +509,6 @@ def intersection_matrix(
     # Return the intersection matrix and the edges of the bins used for the
     # x and y axes, respectively.
     return imat, xx, yy
-
-
-def intersection_matrix_sparse(
-        spiketrains, binsize, dt, t_start_x=None, t_start_y=None, norm=None):
-    """
-    Generates the intersection matrix from a list of spike trains as a sparse
-    matrix (memory-efficient)
-
-    Given a list of SpikeTrains, bins all spike trains and calculate the
-    intersectrion matrix representing, at each entry (i,j), the overlap of
-    bins i and j. The matrix  entries can be normalized to values between 0
-    and 1 via different normalisations (see below)
-
-    Parameters
-    ----------
-    spiketrains : list of neo.SpikeTrains
-        list of SpikeTrains from which to compute the intersection matrix
-    binsize : quantities.Quantity
-        size of the time bins used to define synchronous spikes in the given
-        SpikeTrains.
-    dt : quantities.Quantity
-        time span for which to consider the given SpikeTrains
-    t_start_x, t_start_y : both quantities.Quantity, optional
-        time start of the binning for the first and second axes of the
-        intersection matrix, respectively.
-        If None (default) the attribute t_start of the SpikeTrains is used
-        (if the same for all spike trains).
-        Default: None
-    norm : int, optional
-        type of normalization to be applied to each entry [i,j] of the
-        intersection matrix. Given the sets s_i, s_j of neuron ids in the
-        bins i, j respectively:
-        1: len(intersection(s_i, s_j))
-        2: sqrt(len(s_1) * len(s_2))
-        3: len(union(s_i, s_j))
-
-    Returns
-    -------
-    imat_sparse: numpy.ndarray of floats
-        the intersection matrix of a list of spike trains, as a sparse matrix
-        from module scipy.sparse
-    x_edges : numpy.ndarray
-        edges of the bins used for the horizontal axis of imat. If imat is
-        a matrix of shape (n, n), x_edges has length n+1
-    y_edges : numpy.ndarray
-        edges of the bins used for the vertical axis of imat. If imat is
-        a matrix of shape (n, n), y_edges has length n+1
-    """
-    # Setting the start and stop time for the x and y axes:
-    if t_start_x is None:
-        t_start_x = _signals_same_tstart(spiketrains)
-    if t_start_y is None:
-        t_start_y = _signals_same_tstart(spiketrains)
-
-    t_stop_x = t_start_x + dt
-    t_stop_y = t_start_y + dt
-
-    # Check that all SpikeTrains are defined until t_stop at least
-    t_stop_max = max(t_stop_x, t_stop_y)
-    for i, st in enumerate(spiketrains):
-        if st.t_stop < t_stop_max:
-            raise ValueError(
-                'SpikeTrain %d is shorter than the required time span' % i)
-
-    # For both x and y axis, cut all SpikeTrains between t_start and t_stop
-    sts_x = [st._time_slice(t_start=t_start_x, t_stop=t_stop_x)
-             for st in spiketrains]
-    sts_y = [st._time_slice(t_start=t_start_y, t_stop=t_stop_y)
-             for st in spiketrains]
-
-    # Compute the list spiking neurons per bin, along both axes
-    ids_per_bin_x = _transactions(
-        sts_x, binsize, t_start=t_start_x, t_stop=t_stop_x)
-    ids_per_bin_y = _transactions(
-        sts_y, binsize, t_start=t_start_y, t_stop=t_stop_y)
-
-    # Build the sparse intersection matrix, represented by the lists row,
-    # col and data of first and second indices of each entry, and associated
-    # values
-    N_bins = len(ids_per_bin_x)
-    row = []
-    col = []
-    data = []
-    for ii in _xrange(N_bins):
-        for jj in _xrange(N_bins):
-            if len(ids_per_bin_x[ii]) * len(ids_per_bin_y[jj]) != 0:
-                row += [jj]
-                col += [ii]
-                temp_data = len(set(ids_per_bin_x[ii]).intersection(set(
-                    ids_per_bin_y[jj])))
-                # Normalization types
-                if norm == 1:
-                    temp_data /= float(
-                        min(len(ids_per_bin_x[ii]), len(ids_per_bin_y[jj])))
-                elif norm == 2:
-                    temp_data /= np.sqrt(float(
-                        len(ids_per_bin_x[ii]) * len(ids_per_bin_y[jj])))
-                elif norm == 3:
-                    temp_data /= float(len(set(ids_per_bin_x[ii]).union(
-                        set(ids_per_bin_y[jj]))))
-                data += [temp_data]
-
-    int_mat_sparse = scipy.sparse.coo_matrix(
-        (data, (row, col)), shape=(N_bins, N_bins), dtype=np.float32).todense()
-
-    # Compute the time edges corresponding to the binning employed
-    t_start_x_dl = t_start_x.rescale(binsize.units).magnitude
-    t_start_y_dl = t_start_y.rescale(binsize.units).magnitude
-    t_stop_x_dl = t_stop_x.rescale(binsize.units).magnitude
-    t_stop_y_dl = t_stop_y.rescale(binsize.units).magnitude
-    xx = np.linspace(t_start_x_dl, t_stop_x_dl, N_bins + 1) * binsize.units
-    yy = np.linspace(t_start_y_dl, t_stop_y_dl, N_bins + 1) * binsize.units
-
-    # Return the intersection matrix and the edges of the bins used for the
-    # x and y axes, respectively.
-    return int_mat_sparse, xx, yy
 
 
 def _rnd_permute_except_diag(mat, i=None):

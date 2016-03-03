@@ -1697,7 +1697,7 @@ Given a list `sts` of spike trains, the analysis comprises the following \
 steps: \n \
 1) Build the intersection matrix `imat` (optional) and the associated \n \
    probability matrix `pmat` with the desired bin size:  \n \
-   >>> binsize = 5 * pq.ms  \n \
+   `>>> binsize = 5 * pq.ms  \n `\
    >>> dt = 1 * pq.s  \n \
    >>> imat, xedges, yedges = intersection_matrix(sts, binsize, dt, norm=2)\n \
    >>> pmat, xedges, yedges = probability_matrix_analytical(sts, binsize, dt) \

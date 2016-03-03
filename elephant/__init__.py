@@ -14,7 +14,8 @@ from . import (statistics,
                signal_processing,
                sta,
                conversion,
-               neo_tools)
+               neo_tools,
+	       asset)
 
 try:
     from . import pandas_bridge

@@ -13,5 +13,6 @@ Function Reference
    reference/spike_train_generation
    reference/spike_train_surrogates
    reference/conversion
+   reference/asset
 
 

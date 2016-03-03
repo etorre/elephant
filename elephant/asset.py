@@ -294,6 +294,7 @@ def _sample_pvalue(sample, x):
 
     Given a r.v. X with probability distribution P, the p-value of X at
     the point x is defined as:
+    ..math::
                     pv(x) := P(X >= x) = 1 - cdf(x)
     The smaller pv(x), the less likely that x was extracted from the same
     probability distribution of X.
@@ -513,15 +514,16 @@ def intersection_matrix(
 
 def _reference_diagonal(x_edges, y_edges):
     '''
-    Given two arrays of time bin edges `x_edges = (X1, X2, ..., Xk)` and
-    `y_edges = (Y1, Y2, ..., Yk)`, considers the matrix `M` such that
-    `M_ij = (Xi, Yj)` and finds the reference diagonal of `M`, i.e. the
-    diagonal of `M` whose elements are of the type `(a, a)`.
-    Returns the index of such daigonal and its elements.
+    Given two arrays of time bin edges :math:`x_edges = (X_1, X_2, ..., X_k)`
+    and :math:`y_edges = (Y_1, Y_2, ..., Y_k)`, considers the matrix `M`
+    such that :math:`M_{ij} = (X_i, Y_j)` and finds the reference diagonal of
+    M, i.e. the diagonal of M whose elements are of the type `(a, a)`.
+    Returns the index of such diagonal and its elements.
 
-    For example, if `x_edges = (0, 1, 2, 3) ms` and `y_edges = (1, 2, 3, 4) ms`
-    then the index of the reference diagonal is -1 (first off-diagonal below
-    the main diagonal) and its elements are (-1, 0), (0, 1), (1, 2), (2, 3).
+    For example, if :math:`x_edges = (0, 1, 2, 3) ms` and :math:`y_edges =
+    (1, 2, 3, 4) ms`, then the index of the reference diagonal is -1
+    (first off-diagonal below the main diagonal) and its elements are
+    (-1, 0), (0, 1), (1, 2), (2, 3).
 
     '''
     diag_id = None
@@ -602,10 +604,11 @@ def _stretched_metric_2d(x, y, stretch, ref_angle):
     distance among each of them.
     The classical euclidean distance d between points (x1, y1) and (x2, y2),
     i.e. \sqrt((x1-x2)^2 + (y1-y2)^2), is multiplied by a factor
+    .. math::
 
             1 + (stretch - 1.) * \abs(\sin(ref_angle - \theta)),
 
-    where \theta is the angle between the points and the 45deg direction
+    where \\theta is the angle between the points and the 45deg direction
     (i.e. the line y=x).
     The stretching factor thus steadily varies between 1 (if the line
     connecting (x1, y1) and (x2, y2) has inclination ref_angle) and stretch
@@ -683,8 +686,10 @@ def cluster_matrix_entries(mat, eps=10, min=2, stretch=5):
     as more, with maximal stretching along the anti-diagonal. Specifically,
     the Euclidean distance between positions (i1, j1) and (i2, j2) is
     stretched by a factor
-            1 + (stretch - 1.) * \abs(\sin((\pi / 4) - \theta)),
-    where \theta is the angle between the pixels and the 45deg direction.
+    .. math::
+
+             1 + (stretch - 1.) * \\abs(\\sin((\\pi / 4) - \\theta)),
+    where \\theta is the angle between the pixels and the 45deg direction.
     The stretching factor thus varies between 1 and stretch.
 
     Parameters

@@ -423,9 +423,9 @@ def intersection_matrix(
             raise ValueError(msg)
 
     # For both x and y axis, cut all SpikeTrains between t_start and t_stop
-    sts_x = [st._time_slice(t_start=t_start_x, t_stop=t_stop_x)
+    sts_x = [st.time_slice(t_start=t_start_x, t_stop=t_stop_x)
              for st in spiketrains]
-    sts_y = [st._time_slice(t_start=t_start_y, t_stop=t_stop_y)
+    sts_y = [st.time_slice(t_start=t_start_y, t_stop=t_stop_y)
              for st in spiketrains]
 
     # Compute imat either by matrix multiplication (~20x faster) or by

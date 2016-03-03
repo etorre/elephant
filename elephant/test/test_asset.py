@@ -8,6 +8,8 @@ Created on Wed Oct 22 14:35:49 2014
 import unittest
 import numpy as np
 import scipy.spatial
+import quantities as pq
+import neo
 import elephant.asset as asset
 
 
@@ -160,6 +162,49 @@ class AssetTestCase(unittest.TestCase):
         self.assertTrue(np.all(clustered1 == clustered1_correctA) or
                         np.all(clustered1 == clustered1_correctB))
         self.assertTrue(np.all(clustered2 == clustered2_correct))
+
+    def test_intersection_matrix(self):
+        st1 = neo.SpikeTrain([1, 2, 4]*pq.ms, t_stop=6*pq.ms)
+        st2 = neo.SpikeTrain([1, 3, 4]*pq.ms, t_stop=6*pq.ms)
+        st3 = neo.SpikeTrain([2, 5]*pq.ms, t_start=1*pq.ms, t_stop=6*pq.ms)
+        st4 = neo.SpikeTrain([1, 3, 6]*pq.ms, t_stop=8*pq.ms)
+        binsize = 1 * pq.ms
+
+        # Check that the routine works for correct input...
+        # ...same t_start, t_stop on both time axes
+        imat_1_2, xedges, yedges = asset.intersection_matrix(
+            [st1, st2], binsize, dt=5*pq.ms)
+        trueimat_1_2 = np.array([[0.,  0.,  0.,  0.,  0.],
+                                 [0.,  2.,  1.,  1.,  2.],
+                                 [0.,  1.,  1.,  0.,  1.],
+                                 [0.,  1.,  0.,  1.,  1.],
+                                 [0.,  2.,  1.,  1.,  2.]])
+        self.assertTrue(np.all(xedges == np.arange(6)*pq.ms))  # correct bins
+        self.assertTrue(np.all(yedges == np.arange(6)*pq.ms))  # correct bins
+        self.assertTrue(np.all(imat_1_2 == trueimat_1_2))  # correct matrix
+        # ...different t_start, t_stop on the two time axes
+        imat_1_2, xedges, yedges = asset.intersection_matrix(
+            [st1, st2], binsize, t_start_y=1*pq.ms, dt=5*pq.ms)
+        trueimat_1_2 = np.array([[0.,  0.,  0.,  0., 0.],
+                                 [2.,  1.,  1.,  2., 0.],
+                                 [1.,  1.,  0.,  1., 0.],
+                                 [1.,  0.,  1.,  1., 0.],
+                                 [2.,  1.,  1.,  2., 0.]])
+        self.assertTrue(np.all(xedges == np.arange(6)*pq.ms))  # correct bins
+        self.assertTrue(np.all(imat_1_2 == trueimat_1_2))  # correct matrix
+
+        # Check that errors are raised correctly...
+        # ...for dt too large compared to length of spike trains
+        self.assertRaises(ValueError, asset.intersection_matrix,
+                          spiketrains=[st1, st2], binsize=binsize, dt=8*pq.ms)
+        # ...for different SpikeTrain's t_starts
+        self.assertRaises(ValueError, asset.intersection_matrix,
+                          spiketrains=[st1, st3], binsize=binsize, dt=8*pq.ms)
+        # ...when the analysis is specified for a time span where the
+        # spike trains are not defined (e.g. t_start_x < SpikeTrain.t_start)
+        self.assertRaises(ValueError, asset.intersection_matrix,
+                          spiketrains=[st1, st2], binsize=binsize, dt=8*pq.ms,
+                          t_start_x=-2*pq.ms, t_start_y=-2*pq.ms)
 
 
 def suite():
